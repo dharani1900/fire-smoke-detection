@@ -1,0 +1,59 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+env.bak/
+venv.bak/
+
+# Node / Frontend build artifacts
+node_modules/
+dist/
+dist-ssr/
+*.local
+
+# Environment variables & secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+sql_app.db
+
+# Storage upload artifacts (preserve folder structure via .gitkeep)
+backend/storage/uploads/*
+!backend/storage/uploads/.gitkeep
+backend/storage/visualizations/*
+!backend/storage/visualizations/.gitkeep
+storage/uploads/*
+!storage/uploads/.gitkeep
+storage/visualizations/*
+!storage/visualizations/.gitkeep
+
+# Heavy dataset files (470MB raw images not needed in deployment)
+dataset/
+archive/
+*.zip
+*.tar.gz
+
+# Ensure model artifacts are tracked
+!models/best_model.pth
+!models/model_config.json
+
+# IDEs and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
