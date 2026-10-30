@@ -3,7 +3,8 @@ import type { DetectionRecord, DashboardStats, User } from '../types';
 // Helper to draw semi-transparent simulated flame/smoke hazard plume on image canvas
 export function generateClientSidePlumeOverlay(
   imageSrc: string,
-  isHazard: boolean = true
+  isHazard: boolean = true,
+  status: string = 'normal'
 ): Promise<string> {
   return new Promise((resolve) => {
     const img = new Image();
@@ -26,7 +27,15 @@ export function generateClientSidePlumeOverlay(
       // Draw original image
       ctx.drawImage(img, 0, 0, w, h);
 
-      if (isHazard) {
+      if (status === 'outside_validated_domain') {
+        // Draw amber domain notice banner
+        ctx.fillStyle = '#d97706'; // Amber banner
+        ctx.fillRect(0, h - 35, w, 35);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = 'bold 12px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('OUTSIDE VALIDATED DOMAIN -- RESULT INCONCLUSIVE; MANUAL INSPECTION REQUIRED', w / 2, h - 12);
+      } else if (isHazard) {
         // Render semi-transparent multi-colored thermal/hazard plume gradient
         const centerX = w * 0.55;
         const centerY = h * 0.55;
@@ -138,17 +147,21 @@ export function saveDemoUser(user: User) {
   localStorage.setItem(USER_KEY, JSON.stringify(user));
 }
 
-export async function processDemoAnalyze(file: File, notes?: string): Promise<DetectionRecord> {
+export async function processDemoAnalyze(file: File, notes?: string, targetDomain: string = 'auto'): Promise<DetectionRecord> {
   const originalDataUrl = await new Promise<string>((resolve) => {
     const reader = new FileReader();
     reader.onload = () => resolve(reader.result as string);
     reader.readAsDataURL(file);
   });
 
-  // Only simulate hazard if filename explicitly mentions fire/flame/smoke
   const lowerName = file.name.toLowerCase();
-  const isHazard = lowerName.includes('fire') || lowerName.includes('flame') || lowerName.includes('smoke');
-  const visDataUrl = await generateClientSidePlumeOverlay(originalDataUrl, isHazard);
+  const isDeclaredOOD = targetDomain === 'indoor_cabinet' || targetDomain === 'outside_domain';
+  const isCabinetName = lowerName.includes('cabinet') || lowerName.includes('indoor') || lowerName.includes('cylinder');
+  const isOutsideDomain = isDeclaredOOD || isCabinetName;
+
+  const isHazard = !isOutsideDomain && (lowerName.includes('fire') || lowerName.includes('flame') || lowerName.includes('smoke'));
+  const status = isOutsideDomain ? 'outside_validated_domain' : (isHazard ? 'hazard_detected' : 'normal');
+  const visDataUrl = await generateClientSidePlumeOverlay(originalDataUrl, isHazard, status);
 
   const history = getDemoHistory();
   const newRecord: DetectionRecord = {
@@ -156,16 +169,26 @@ export async function processDemoAnalyze(file: File, notes?: string): Promise<De
     user_id: 1,
     original_image_path: originalDataUrl,
     visualization_image_path: visDataUrl,
-    prediction: isHazard ? 'hazard_detected' : 'normal',
-    confidence: isHazard ? 0.885 : 0.942,
+    prediction: status as any,
+    confidence: isOutsideDomain ? 0.727 : (isHazard ? 0.885 : 0.942),
     mode: 'demo_mode', // Explicitly marked as demo simulation
     visualization_type: 'illustrative_simulation',
-    severity: isHazard ? 'Medium' : 'None',
+    severity: isOutsideDomain ? 'Inconclusive' : (isHazard ? 'Medium' : 'None'),
     alarm_recommended: false, // Never trigger emergency siren on offline demo fallback
     alarm_activated: false,
     model_version: 'Demo-Offline-v1.0',
     notes: notes ? `${notes} [Offline Demo Preview]` : '[Offline Demo Preview - No Backend]',
-    timestamp: new Date().toISOString()
+    timestamp: new Date().toISOString(),
+    domain_validation: {
+      is_valid_domain: !isOutsideDomain,
+      declared_domain: targetDomain,
+      validated_domain: 'maritime_harbor_surveillance',
+      feature_similarity: isOutsideDomain ? 0.273 : 0.584,
+      similarity_threshold: 0.38,
+      validation_message: isOutsideDomain
+        ? 'Outside validated image domain — result inconclusive; manual inspection required.'
+        : 'Image conforms to validated maritime domain.'
+    }
   };
 
   history.unshift(newRecord);

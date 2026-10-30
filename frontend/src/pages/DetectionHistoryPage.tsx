@@ -138,6 +138,7 @@ export const DetectionHistoryPage: React.FC = () => {
               <option value="hazard_detected">Hazard Alerts Only</option>
               <option value="normal">Safe Scans Only</option>
               <option value="uncertain">Inconclusive / Uncertain Only</option>
+              <option value="outside_validated_domain">Outside Validated Domain Only</option>
             </select>
           </div>
 
@@ -207,6 +208,11 @@ export const DetectionHistoryPage: React.FC = () => {
                     <span className="inline-flex items-center space-x-1 bg-red-100 text-red-700 font-bold text-xs px-2.5 py-1 rounded-full border border-red-300">
                       <Flame className="w-3.5 h-3.5 text-red-600" />
                       <span>Hazard Alert</span>
+                    </span>
+                  ) : record.prediction === 'outside_validated_domain' ? (
+                    <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Outside Domain</span>
                     </span>
                   ) : record.prediction === 'uncertain' ? (
                     <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">

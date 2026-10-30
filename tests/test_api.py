@@ -48,7 +48,7 @@ class TestInferencePipeline(unittest.TestCase):
         result = self.predictor.predict_image(img)
 
         self.assertIn("predicted_class", result)
-        self.assertIn(result["predicted_class"], ["normal", "hazard_detected", "uncertain"])
+        self.assertIn(result["predicted_class"], ["normal", "hazard_detected", "uncertain", "outside_validated_domain"])
         self.assertIn("confidence", result)
         self.assertTrue(0.0 <= result["confidence"] <= 1.0)
         
@@ -65,11 +65,11 @@ class TestInferencePipeline(unittest.TestCase):
         """Verifies that non-RGB images are safely converted and handled."""
         gray_img = Image.new("L", (100, 100), color=128)
         result = self.predictor.predict_image(gray_img)
-        self.assertIn(result["predicted_class"], ["normal", "hazard_detected", "uncertain"])
+        self.assertIn(result["predicted_class"], ["normal", "hazard_detected", "uncertain", "outside_validated_domain"])
 
         rgba_img = Image.new("RGBA", (150, 150), color=(255, 0, 0, 128))
         result_rgba = self.predictor.predict_image(rgba_img)
-        self.assertIn(result_rgba["predicted_class"], ["normal", "hazard_detected", "uncertain"])
+        self.assertIn(result_rgba["predicted_class"], ["normal", "hazard_detected", "uncertain", "outside_validated_domain"])
 
     def test_uncertainty_handling_for_ambiguous_probabilities(self):
         """
@@ -152,7 +152,7 @@ class TestInferencePipeline(unittest.TestCase):
         img = Image.new("RGB", (300, 300), color=(180, 80, 40))
         img.save(test_img_path)
 
-        for status_mode, is_haz in [("hazard_detected", True), ("normal", False), ("uncertain", False)]:
+        for status_mode, is_haz in [("hazard_detected", True), ("normal", False), ("uncertain", False), ("outside_validated_domain", False)]:
             out_vis_path = os.path.join(backend_dir, "storage", f"test_vis_{status_mode}.jpg")
             out_path = generate_hazard_visualization(
                 image_path=test_img_path,
@@ -168,6 +168,67 @@ class TestInferencePipeline(unittest.TestCase):
 
         if os.path.exists(test_img_path):
             os.remove(test_img_path)
+
+    def test_domain_centroid_loaded(self):
+        """Verifies that the maritime domain centroid is loaded with 1280 feature dimensions."""
+        self.assertIsNotNone(self.predictor.domain_centroid)
+        self.assertEqual(len(self.predictor.domain_centroid), 1280)
+        self.assertEqual(self.predictor.domain_threshold, 0.38)
+
+    def test_ood_detection_on_indoor_cabinet(self):
+        """
+        Verifies that out-of-distribution indoor chemical cabinets are detected as
+        'outside_validated_domain' and do NOT trigger emergency alarms.
+        """
+        import glob
+        uploaded_images = glob.glob(r"C:\Users\DHARANI\.gemini\antigravity\brain\82cbd9cc-aaf8-4645-bacf-40b0120862db\.user_uploaded\*.png")
+        if uploaded_images:
+            res = self.predictor.predict_image(uploaded_images[0], target_domain="auto")
+            self.assertEqual(res["predicted_class"], "outside_validated_domain")
+            self.assertEqual(res["severity"], "Inconclusive")
+            self.assertFalse(res["risk_assessment"]["alarm_triggered"], "OOD input must NOT activate alarm")
+            self.assertFalse(res["domain_validation"]["is_valid_domain"])
+            self.assertTrue(res["domain_validation"]["feature_similarity"] < 0.38)
+            self.assertIn("Outside validated image domain", res["risk_assessment"]["action_recommended"])
+
+    def test_72_percent_probability_alarm_suppression(self):
+        """
+        Verifies that even if an out-of-distribution image produces a raw 72.7% hazard probability
+        due to flame-like yellow/red colors, the alarm remains SILENT and status is INCONCLUSIVE.
+        """
+        import glob
+        uploaded_images = glob.glob(r"C:\Users\DHARANI\.gemini\antigravity\brain\82cbd9cc-aaf8-4645-bacf-40b0120862db\.user_uploaded\*.png")
+        if uploaded_images:
+            res = self.predictor.predict_image(uploaded_images[0])
+            # Even with hazard probability in the 70-80% range
+            self.assertFalse(res["risk_assessment"]["alarm_triggered"])
+            self.assertEqual(res["predicted_class"], "outside_validated_domain")
+            self.assertEqual(res["severity"], "Inconclusive")
+            self.assertFalse(res["domain_validation"]["is_valid_domain"])
+
+    def test_declared_environment_override(self):
+        """
+        Verifies that declaring an indoor cabinet environment flags the image as
+        outside validated domain, even if visual features resemble maritime images.
+        """
+        import glob
+        haz_images = glob.glob(os.path.join(project_dir, "dataset", "test", "hazard_detected", "*.jpg"))
+        if haz_images:
+            res = self.predictor.predict_image(haz_images[0], target_domain="indoor_cabinet")
+            self.assertEqual(res["predicted_class"], "outside_validated_domain")
+            self.assertFalse(res["risk_assessment"]["alarm_triggered"])
+            self.assertFalse(res["domain_validation"]["is_valid_domain"])
+            self.assertIn("Operator declared", res["domain_validation"]["validation_message"])
+
+    def test_maritime_domain_hazard_triggers_alarm(self):
+        """Verifies that legitimate maritime hazards retain alarm activation."""
+        import glob
+        haz_images = glob.glob(os.path.join(project_dir, "dataset", "test", "hazard_detected", "*.jpg"))
+        if haz_images:
+            res = self.predictor.predict_image(haz_images[0], target_domain="maritime")
+            self.assertEqual(res["predicted_class"], "hazard_detected")
+            self.assertTrue(res["risk_assessment"]["alarm_triggered"])
+            self.assertTrue(res["domain_validation"]["is_valid_domain"])
 
 if __name__ == "__main__":
     unittest.main()

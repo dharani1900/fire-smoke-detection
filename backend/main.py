@@ -210,7 +210,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     total_images = len(records)
     hazard_count = sum(1 for r in records if r.prediction in ("hazard_detected", "leakage"))
     safe_count = sum(1 for r in records if r.prediction in ("normal", "no_leakage"))
-    uncertain_count = sum(1 for r in records if r.prediction == "uncertain")
+    uncertain_count = sum(1 for r in records if r.prediction in ("uncertain", "outside_validated_domain"))
 
     latest = format_detection(records[0]) if records else None
 
@@ -223,7 +223,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         day_records = [r for r in records if r.timestamp and r.timestamp.date() == day]
         day_hazard = sum(1 for r in day_records if r.prediction in ("hazard_detected", "leakage"))
         day_safe = sum(1 for r in day_records if r.prediction in ("normal", "no_leakage"))
-        day_uncertain = sum(1 for r in day_records if r.prediction == "uncertain")
+        day_uncertain = sum(1 for r in day_records if r.prediction in ("uncertain", "outside_validated_domain"))
         detections_over_time.append({
             "date": day_str,
             "total": len(day_records),
@@ -235,7 +235,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     prediction_breakdown = [
         {"name": "Safe / Nominal", "value": safe_count, "color": "#10b981"},
         {"name": "Hazard Alert", "value": hazard_count, "color": "#ef4444"},
-        {"name": "Inconclusive", "value": uncertain_count, "color": "#f59e0b"}
+        {"name": "Inconclusive / OOD", "value": uncertain_count, "color": "#f59e0b"}
     ]
 
     alarm_status = "active" if (latest and latest.get("alarm_recommended")) else "silent"
@@ -257,6 +257,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
 async def analyze_image(
     file: UploadFile = File(...),
     notes: Optional[str] = Form(None),
+    target_domain: Optional[str] = Form("auto"),
     db: Session = Depends(get_db)
 ):
     pred_engine = get_predictor()
@@ -277,14 +278,17 @@ async def analyze_image(
     with open(orig_filepath, "wb") as f:
         f.write(contents)
 
-    # Run inference
-    inference_result = pred_engine.predict_image(contents)
+    # Run inference with domain validation
+    inference_result = pred_engine.predict_image(contents, target_domain=target_domain or "auto")
     predicted_class = inference_result["predicted_class"]
     confidence = float(inference_result["confidence"])
 
     is_hazard = predicted_class == "hazard_detected"
-    severity = inference_result.get("severity") or ("High" if is_hazard else ("Inconclusive" if predicted_class == "uncertain" else "None"))
-    alarm_recommended = inference_result.get("risk_assessment", {}).get("alarm_triggered", is_hazard)
+    severity = inference_result.get("severity") or (
+        "High" if is_hazard
+        else ("Inconclusive" if predicted_class in ("uncertain", "outside_validated_domain") else "None")
+    )
+    alarm_recommended = inference_result.get("risk_assessment", {}).get("alarm_triggered", False)
 
     # Generate visual artifact with status awareness
     try:
@@ -328,6 +332,7 @@ async def analyze_image(
     formatted = format_detection(new_record)
     formatted["probabilities"] = inference_result.get("probabilities", {})
     formatted["risk_assessment"] = inference_result.get("risk_assessment", {})
+    formatted["domain_validation"] = inference_result.get("domain_validation", {})
     formatted["limitations_notice"] = inference_result.get("limitations_notice", "")
     return JSONResponse(content=formatted)
 
@@ -345,8 +350,8 @@ def get_detections(
             query = query.filter(DetectionRecord.prediction.in_(["hazard_detected", "leakage"]))
         elif status_filter in ("normal", "no_leakage"):
             query = query.filter(DetectionRecord.prediction.in_(["normal", "no_leakage"]))
-        elif status_filter == "uncertain":
-            query = query.filter(DetectionRecord.prediction == "uncertain")
+        elif status_filter in ("uncertain", "inconclusive", "outside_validated_domain"):
+            query = query.filter(DetectionRecord.prediction.in_(["uncertain", "outside_validated_domain"]))
         else:
             query = query.filter(DetectionRecord.prediction == status_filter)
 

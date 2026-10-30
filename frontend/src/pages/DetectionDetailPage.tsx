@@ -112,7 +112,7 @@ export const DetectionDetailPage: React.FC = () => {
       <div className={`p-6 rounded-2xl text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 ${
         record.prediction === 'hazard_detected'
           ? 'bg-red-600 border-2 border-red-700'
-          : record.prediction === 'uncertain'
+          : (record.prediction === 'uncertain' || record.prediction === 'outside_validated_domain')
           ? 'bg-amber-600 border-2 border-amber-700'
           : 'bg-emerald-600 border-2 border-emerald-700'
       }`}>
@@ -120,7 +120,7 @@ export const DetectionDetailPage: React.FC = () => {
           <div className="bg-white/20 p-3 rounded-2xl">
             {record.prediction === 'hazard_detected' ? (
               <Flame className="w-8 h-8 text-white" />
-            ) : record.prediction === 'uncertain' ? (
+            ) : (record.prediction === 'uncertain' || record.prediction === 'outside_validated_domain') ? (
               <AlertTriangle className="w-8 h-8 text-white" />
             ) : (
               <ShieldCheck className="w-8 h-8 text-white" />
@@ -133,6 +133,8 @@ export const DetectionDetailPage: React.FC = () => {
             <h2 className="text-2xl font-black tracking-tight mt-1">
               {record.prediction === 'hazard_detected'
                 ? 'FIRE / SMOKE HAZARD DETECTED'
+                : record.prediction === 'outside_validated_domain'
+                ? 'OUTSIDE VALIDATED DOMAIN — RESULT INCONCLUSIVE'
                 : record.prediction === 'uncertain'
                 ? 'UNCERTAIN — MANUAL INSPECTION REQUIRED'
                 : 'NO VISIBLE FIRE / SMOKE DETECTED'}
@@ -156,6 +158,37 @@ export const DetectionDetailPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Domain Validation Info Card (if present) */}
+      {record.domain_validation && (
+        <div className={`p-4 rounded-xl border text-xs space-y-1.5 ${
+          record.domain_validation.is_valid_domain
+            ? 'bg-slate-50 border-slate-200 text-slate-700'
+            : 'bg-amber-50 border-amber-300 text-amber-900'
+        }`}>
+          <div className="flex items-center justify-between font-bold">
+            <span className="flex items-center space-x-1.5">
+              <Info className="w-4 h-4 text-amber-700" />
+              <span>Domain Validation Status</span>
+            </span>
+            <span className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-bold ${
+              record.domain_validation.is_valid_domain
+                ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                : 'bg-amber-200 text-amber-900 border border-amber-400'
+            }`}>
+              {record.domain_validation.is_valid_domain ? 'Validated Maritime Domain' : 'Outside Validated Domain'}
+            </span>
+          </div>
+          <p className="leading-relaxed">
+            {record.domain_validation.validation_message}
+          </p>
+          {record.domain_validation.feature_similarity !== undefined && record.domain_validation.feature_similarity !== null && (
+            <div className="font-mono text-[11px] opacity-80 pt-0.5">
+              Feature Similarity: <strong>{record.domain_validation.feature_similarity.toFixed(4)}</strong> (Threshold: {record.domain_validation.similarity_threshold || 0.38})
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Side-by-Side Visual Comparison Card */}
       <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-md space-y-4">
@@ -198,6 +231,8 @@ export const DetectionDetailPage: React.FC = () => {
               <span>
                 {record.prediction === 'hazard_detected'
                   ? 'Illustrative Simulation Overlay (Not a gas measurement)'
+                  : record.prediction === 'outside_validated_domain'
+                  ? 'Inspection Status Overlay (Outside Validated Domain - No plume simulated)'
                   : record.prediction === 'uncertain'
                   ? 'Inspection Status Overlay (Inconclusive - No plume simulated)'
                   : 'Inspection Status Overlay (Nominal Safe Status)'}

@@ -6,12 +6,22 @@ export interface User {
   created_at: string;
 }
 
+export interface DomainValidation {
+  is_valid_domain: boolean;
+  declared_domain?: string;
+  detected_domain?: string;
+  validated_domain?: string;
+  feature_similarity?: number | null;
+  similarity_threshold?: number;
+  validation_message?: string;
+}
+
 export interface DetectionRecord {
   id: number;
   user_id: number;
   original_image_path: string;
   visualization_image_path?: string;
-  prediction: 'hazard_detected' | 'normal' | 'uncertain' | 'leakage' | 'no_leakage';
+  prediction: 'hazard_detected' | 'normal' | 'uncertain' | 'outside_validated_domain' | 'leakage' | 'no_leakage';
   confidence: number;
   mode: 'trained_model' | 'demo_mode';
   visualization_type: string;
@@ -22,6 +32,7 @@ export interface DetectionRecord {
   notes?: string;
   timestamp: string;
   probabilities?: Record<string, number>;
+  domain_validation?: DomainValidation;
   limitations_notice?: string;
 }
 

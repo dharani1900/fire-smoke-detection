@@ -23,6 +23,7 @@ export const ImageDetectionPage: React.FC = () => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [notes, setNotes] = useState<string>('');
+  const [targetDomain, setTargetDomain] = useState<string>('auto');
   const [loading, setLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<DetectionRecord | null>(null);
@@ -79,6 +80,7 @@ export const ImageDetectionPage: React.FC = () => {
     const formData = new FormData();
     formData.append('file', selectedFile);
     if (notes) formData.append('notes', notes);
+    formData.append('target_domain', targetDomain);
 
     try {
       const res = await api.post<DetectionRecord>('/api/detections/analyze', formData, {
@@ -114,6 +116,7 @@ export const ImageDetectionPage: React.FC = () => {
     setResult(null);
     setError(null);
     setNotes('');
+    setTargetDomain('auto');
   };
 
   return (
@@ -191,6 +194,22 @@ export const ImageDetectionPage: React.FC = () => {
               <h3 className="font-bold text-slate-800 text-sm border-b border-slate-100 pb-2">Analysis Parameters</h3>
               
               <div>
+                <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Target Environment</label>
+                <select
+                  value={targetDomain}
+                  onChange={(e) => setTargetDomain(e.target.value)}
+                  className="w-full p-2.5 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="auto">Auto-Detect Domain (Feature Analysis)</option>
+                  <option value="indoor_cabinet">Chemical Storage / Indoor Cabinet (Unsupported)</option>
+                  <option value="maritime">Maritime & Harbor (Validated Domain)</option>
+                </select>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Model is validated for maritime imagery. Unsupported environments are flagged as inconclusive.
+                </p>
+              </div>
+
+              <div>
                 <label className="block text-xs font-semibold text-slate-600 uppercase mb-1">Inspector Notes (Optional)</label>
                 <textarea
                   rows={3}
@@ -207,7 +226,7 @@ export const ImageDetectionPage: React.FC = () => {
                   <span>Model Inference Notice</span>
                 </p>
                 <p>
-                  Images are processed using fine-tuned PyTorch MobileNetV2 trained on real industrial imagery. When a hazard is predicted, an explainable attention heatmap overlay will be rendered.
+                  Images are processed using fine-tuned PyTorch MobileNetV2 trained on maritime imagery. When a hazard is predicted in the validated domain, an illustrative simulation overlay will be rendered.
                 </p>
               </div>
             </div>
@@ -246,7 +265,34 @@ export const ImageDetectionPage: React.FC = () => {
         /* Results View (Side-by-Side Display) */
         <div className="space-y-6">
           {/* Prominent Prediction Banner */}
-          {result.prediction === 'hazard_detected' ? (
+          {result.prediction === 'outside_validated_domain' ? (
+            <div className="bg-amber-600 text-white p-6 rounded-2xl shadow-xl border-2 border-amber-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center space-x-4">
+                <div className="bg-white/20 p-3 rounded-2xl">
+                  <AlertTriangle className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-white text-amber-900 text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      OUTSIDE VALIDATED DOMAIN
+                    </span>
+                    <span className="text-xs text-amber-100 font-mono">Mode: {result.mode}</span>
+                  </div>
+                  <h2 className="text-2xl font-black mt-1 tracking-tight">OUTSIDE VALIDATED IMAGE DOMAIN — RESULT INCONCLUSIVE</h2>
+                  <p className="text-xs text-amber-100 mt-0.5">
+                    Model Confidence: <strong>{(result.confidence * 100).toFixed(1)}%</strong> | Manual Inspection Required | Alarm: <strong>Silent</strong>
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <div className="bg-amber-800/80 px-4 py-2 rounded-xl border border-amber-400 text-center">
+                  <span className="text-xs font-bold text-amber-100 block">Alarm Silent</span>
+                  <span className="text-[10px] text-amber-200">No Confirmed Hazard</span>
+                </div>
+              </div>
+            </div>
+          ) : result.prediction === 'hazard_detected' ? (
             <div className="bg-red-600 text-white p-6 rounded-2xl shadow-xl border-2 border-red-700 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse-danger">
               <div className="flex items-center space-x-4">
                 <div className="bg-white/20 p-3 rounded-2xl">
@@ -320,6 +366,37 @@ export const ImageDetectionPage: React.FC = () => {
             </div>
           )}
 
+          {/* Domain Validation Notice Card */}
+          {result.domain_validation && (
+            <div className={`p-4 rounded-xl border text-xs space-y-2 ${
+              result.domain_validation.is_valid_domain
+                ? 'bg-slate-50 border-slate-200 text-slate-700'
+                : 'bg-amber-50 border-amber-300 text-amber-900'
+            }`}>
+              <div className="flex items-center justify-between font-bold">
+                <span className="flex items-center space-x-1.5">
+                  <Info className="w-4 h-4 text-amber-700" />
+                  <span>Domain Validation Analysis</span>
+                </span>
+                <span className={`px-2.5 py-0.5 rounded text-[11px] font-mono font-bold ${
+                  result.domain_validation.is_valid_domain
+                    ? 'bg-emerald-100 text-emerald-800 border border-emerald-300'
+                    : 'bg-amber-200 text-amber-900 border border-amber-400'
+                }`}>
+                  {result.domain_validation.is_valid_domain ? 'Validated Maritime Domain' : 'Outside Validated Domain'}
+                </span>
+              </div>
+              <p className="leading-relaxed">
+                {result.domain_validation.validation_message}
+              </p>
+              {result.domain_validation.feature_similarity !== undefined && result.domain_validation.feature_similarity !== null && (
+                <div className="font-mono text-[11px] opacity-80 pt-0.5">
+                  Feature Centroid Cosine Similarity: <strong>{result.domain_validation.feature_similarity.toFixed(4)}</strong> (Threshold: {result.domain_validation.similarity_threshold || 0.38})
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Model Probability Breakdown Card */}
           {result.probabilities && (
             <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-xs space-y-2">
@@ -385,6 +462,8 @@ export const ImageDetectionPage: React.FC = () => {
                   <span>
                     {result.prediction === 'hazard_detected'
                       ? 'Illustrative Simulation Overlay (Not a gas measurement)'
+                      : result.prediction === 'outside_validated_domain'
+                      ? 'Inspection Status Overlay (Outside Validated Domain - No plume simulated)'
                       : result.prediction === 'uncertain'
                       ? 'Inspection Status Overlay (Inconclusive - No plume simulated)'
                       : 'Inspection Status Overlay (Nominal Safe Status)'}

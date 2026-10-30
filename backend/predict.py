@@ -1,8 +1,9 @@
 import os
 import json
-from typing import Dict, Any, Union
+from typing import Dict, Any, Union, Optional
 from io import BytesIO
 from PIL import Image
+import numpy as np
 import torch
 from torchvision import transforms
 
@@ -29,17 +30,20 @@ def find_models_dir() -> str:
     return parent_models
 
 class Predictor:
-    def __init__(self, model_path: str = None, config_path: str = None):
+    def __init__(self, model_path: str = None, config_path: str = None, centroid_path: str = None):
         models_dir = find_models_dir()
         
         self.model_path = model_path or os.path.join(models_dir, "best_model.pth")
         self.config_path = config_path or os.path.join(models_dir, "model_config.json")
+        self.centroid_path = centroid_path or os.path.join(models_dir, "domain_centroid.json")
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         
         self.model = None
         self.config = None
         self.transform = None
         self.idx_to_class = {}
+        self.domain_centroid = None
+        self.domain_threshold = 0.38
         
         self._load()
 
@@ -57,6 +61,16 @@ class Predictor:
         self.model.load_state_dict(torch.load(self.model_path, map_location=self.device))
         self.model.to(self.device)
         self.model.eval()
+
+        # Load domain validation centroid if available
+        if os.path.exists(self.centroid_path):
+            try:
+                with open(self.centroid_path, "r") as f:
+                    cdata = json.load(f)
+                    self.domain_centroid = np.array(cdata["centroid"], dtype=np.float32)
+                    self.domain_threshold = float(cdata.get("similarity_threshold", 0.38))
+            except Exception as e:
+                print(f"[-] Warning: Failed to load domain centroid: {e}")
         
         # Build evaluation transform
         mean = self.config["normalization"]["mean"]
@@ -69,10 +83,12 @@ class Predictor:
             transforms.Normalize(mean=mean, std=std)
         ])
 
-    def predict_image(self, image_input: Union[str, bytes, BytesIO, Image.Image]) -> Dict[str, Any]:
+    def predict_image(self, image_input: Union[str, bytes, BytesIO, Image.Image], target_domain: str = "auto") -> Dict[str, Any]:
         """
-        Runs inference on an input image.
-        Returns predicted class, confidence, softmax probabilities, risk assessment, and limitations.
+        Runs inference on an input image with dual-layer domain validation.
+        Validates whether the image matches the model's maritime training distribution.
+        If out-of-distribution (e.g. indoor chemical storage cabinets), returns 'outside_validated_domain'
+        with inconclusive severity and suppresses false alarms.
         """
         if self.model is None:
             self._load()
@@ -101,54 +117,96 @@ class Predictor:
             tensor = self.transform(img).unsqueeze(0).to(self.device)
 
         with torch.no_grad():
-            outputs = self.model(tensor)
+            feat = self.model.features(tensor)
+            pooled = torch.nn.functional.adaptive_avg_pool2d(feat, (1, 1))
+            flattened = torch.flatten(pooled, 1)
+            outputs = self.model.classifier(flattened)
             probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
             raw_pred_idx = int(torch.argmax(outputs, dim=1).item())
+            feat_vec = flattened[0].cpu().numpy()
 
         prob_hazard = float(probs[0])
         prob_normal = float(probs[1])
         raw_predicted_class = self.idx_to_class[raw_pred_idx]
 
-        # Format probability distribution
+        # Format raw probability distribution
         probabilities = {
             self.idx_to_class[0]: round(prob_hazard, 4),
             self.idx_to_class[1]: round(prob_normal, 4)
         }
 
-        # Calibrated Decision Thresholds
-        # Binary classification with 50-65% confidence indicates ambiguity / out-of-distribution input
+        # --- Dual-Layer Domain Validation ---
+        cos_sim = None
+        if self.domain_centroid is not None:
+            f_norm = float(np.linalg.norm(feat_vec))
+            c_norm = float(np.linalg.norm(self.domain_centroid))
+            if f_norm > 0 and c_norm > 0:
+                cos_sim = float(np.dot(feat_vec, self.domain_centroid) / (f_norm * c_norm))
+
+        norm_domain = (target_domain or "auto").strip().lower()
+        is_declared_ood = norm_domain in ("indoor_cabinet", "chemical_cabinet", "laboratory", "outside_domain")
+        is_declared_maritime = norm_domain in ("maritime", "maritime_harbor", "open_water")
+
+        is_feature_ood = False
+        if cos_sim is not None and not is_declared_maritime:
+            if cos_sim < self.domain_threshold:
+                is_feature_ood = True
+
+        is_outside_domain = is_declared_ood or is_feature_ood
+
         CONFIDENCE_THRESHOLD = 0.65
 
-        if prob_hazard >= CONFIDENCE_THRESHOLD:
-            predicted_class = "hazard_detected"
-            confidence = prob_hazard
-            severity = "High" if prob_hazard >= 0.85 else "Medium"
-            risk_level = "High Risk / Active Hazard" if severity == "High" else "Moderate Risk / Visual Confirmation Needed"
-            alarm_triggered = True
-            action_recommended = (
-                "Visible fire or smoke pattern identified with high confidence. "
-                "Immediate visual confirmation required. Deploy safety personnel / verify sensor data."
-            )
-        elif prob_normal >= CONFIDENCE_THRESHOLD:
-            predicted_class = "normal"
-            confidence = prob_normal
-            severity = "None"
-            risk_level = "Nominal / Normal Conditions"
-            alarm_triggered = False
-            action_recommended = "No visible fire or smoke indicators detected. Standard continuous monitoring."
-        else:
-            # Low-confidence / Ambiguous zone (e.g. 54.2% hazard vs 45.8% normal)
-            # Never trigger false alarms on out-of-distribution or ambiguous images
-            predicted_class = "uncertain"
+        if is_outside_domain:
+            predicted_class = "outside_validated_domain"
             confidence = max(prob_hazard, prob_normal)
             severity = "Inconclusive"
-            risk_level = "Inconclusive / Manual Verification Required"
+            risk_level = "Outside Validated Domain / Result Inconclusive"
             alarm_triggered = False
             action_recommended = (
-                "Visual features are ambiguous or out-of-distribution (confidence below operational 65% threshold). "
-                "Manual visual inspection required. Ordinary RGB cameras cannot detect invisible gases; "
-                "verify with physical chemical sensors."
+                "Outside validated image domain — result inconclusive; manual inspection required. "
+                "The trained model is validated on maritime surface fire/smoke imagery. "
+                "Indoor chemical cabinets and containers cannot be reliably classified by this model."
             )
+            is_valid_domain = False
+            validation_msg = (
+                "Operator declared unsupported environment." if is_declared_ood
+                else f"Visual feature similarity ({cos_sim:.3f}) falls below maritime training domain threshold ({self.domain_threshold})."
+            )
+        else:
+            is_valid_domain = True
+            validation_msg = (
+                "Operator selected maritime domain." if is_declared_maritime
+                else f"Feature representation conforms to maritime domain (similarity: {cos_sim:.3f} >= {self.domain_threshold})."
+            )
+
+            if prob_hazard >= CONFIDENCE_THRESHOLD:
+                predicted_class = "hazard_detected"
+                confidence = prob_hazard
+                severity = "High" if prob_hazard >= 0.85 else "Medium"
+                risk_level = "High Risk / Active Hazard" if severity == "High" else "Moderate Risk / Visual Confirmation Needed"
+                alarm_triggered = True
+                action_recommended = (
+                    "Visible fire or smoke pattern identified with high confidence in validated maritime domain. "
+                    "Immediate visual confirmation required. Deploy safety personnel / verify sensor data."
+                )
+            elif prob_normal >= CONFIDENCE_THRESHOLD:
+                predicted_class = "normal"
+                confidence = prob_normal
+                severity = "None"
+                risk_level = "Nominal / Normal Conditions"
+                alarm_triggered = False
+                action_recommended = "No visible fire or smoke indicators detected in validated domain. Standard continuous monitoring."
+            else:
+                predicted_class = "uncertain"
+                confidence = max(prob_hazard, prob_normal)
+                severity = "Inconclusive"
+                risk_level = "Inconclusive / Ambiguous Feature Pattern"
+                alarm_triggered = False
+                action_recommended = (
+                    "Visual features are ambiguous (confidence below operational 65% threshold). "
+                    "Manual visual inspection required. Ordinary RGB cameras cannot detect invisible gases; "
+                    "verify with physical chemical sensors."
+                )
 
         return {
             "predicted_class": predicted_class,
@@ -161,6 +219,14 @@ class Predictor:
                 "risk_level": risk_level,
                 "alarm_triggered": alarm_triggered,
                 "action_recommended": action_recommended
+            },
+            "domain_validation": {
+                "is_valid_domain": is_valid_domain,
+                "declared_domain": target_domain,
+                "validated_domain": "maritime_harbor_surveillance",
+                "feature_similarity": round(cos_sim, 4) if cos_sim is not None else None,
+                "similarity_threshold": self.domain_threshold,
+                "validation_message": validation_msg
             },
             "model_metadata": {
                 "architecture": self.config.get("model_architecture", "MobileNetV2"),

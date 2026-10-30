@@ -123,10 +123,10 @@ export const DashboardPage: React.FC = () => {
 
         <StatCard
           title="Latest Detection"
-          value={stats.latest_detection ? stats.latest_detection.prediction.toUpperCase() : 'N/A'}
+          value={stats.latest_detection ? (stats.latest_detection.prediction === 'outside_validated_domain' ? 'OUTSIDE DOMAIN' : stats.latest_detection.prediction.toUpperCase()) : 'N/A'}
           subtitle={stats.latest_detection ? new Date(stats.latest_detection.timestamp).toLocaleTimeString() : 'No scans yet'}
           icon={Clock}
-          color={stats.latest_detection?.prediction === 'hazard_detected' || stats.latest_detection?.prediction === 'leakage' ? 'red' : stats.latest_detection?.prediction === 'uncertain' ? 'amber' : 'indigo'}
+          color={stats.latest_detection?.prediction === 'hazard_detected' || stats.latest_detection?.prediction === 'leakage' ? 'red' : (stats.latest_detection?.prediction === 'uncertain' || stats.latest_detection?.prediction === 'outside_validated_domain') ? 'amber' : 'indigo'}
           badgeText={stats.latest_detection ? `Conf: ${(stats.latest_detection.confidence * 100).toFixed(1)}%` : 'Ready'}
         />
 
@@ -252,6 +252,11 @@ export const DashboardPage: React.FC = () => {
                         <span className="inline-flex items-center space-x-1 bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full border border-red-300">
                           <AlertTriangle className="w-3 h-3 text-red-600" />
                           <span>Hazard Alert</span>
+                        </span>
+                      ) : record.prediction === 'outside_validated_domain' ? (
+                        <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-full border border-amber-300">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span>Outside Domain</span>
                         </span>
                       ) : record.prediction === 'uncertain' ? (
                         <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-full border border-amber-300">

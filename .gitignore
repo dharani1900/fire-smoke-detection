@@ -50,6 +50,7 @@ archive/
 # Ensure model artifacts are tracked
 !models/best_model.pth
 !models/model_config.json
+!models/domain_centroid.json
 
 # IDEs and OS
 .vscode/

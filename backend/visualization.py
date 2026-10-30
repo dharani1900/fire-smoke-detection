@@ -25,6 +25,37 @@ def generate_hazard_visualization(
     # Determine resolved status
     current_status = status or ("hazard_detected" if is_hazard else "normal")
 
+    if current_status in ("outside_validated_domain", "unsupported_domain"):
+        # Amber banner for out-of-distribution inputs (no fake plume!)
+        overlay = img_bgr.copy()
+        banner_h = max(48, int(height * 0.09))
+        # Amber / Dark Orange in BGR: (0, 140, 255)
+        cv2.rectangle(overlay, (0, height - banner_h), (width, height), (0, 140, 255), -1)
+        combined = cv2.addWeighted(overlay, 0.92, img_bgr, 0.08, 0)
+        cv2.putText(
+            combined,
+            "OUTSIDE VALIDATED DOMAIN - RESULT INCONCLUSIVE; MANUAL INSPECTION REQUIRED",
+            (15, height - int(banner_h * 0.48)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.40, width / 1300.0),
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
+        cv2.putText(
+            combined,
+            "Model validated on maritime imagery only. Indoor chemical storage requires physical sensors.",
+            (15, height - int(banner_h * 0.16)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.33, width / 1550.0),
+            (240, 240, 240),
+            1,
+            cv2.LINE_AA
+        )
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        cv2.imwrite(output_path, combined)
+        return output_path
+
     if current_status == "uncertain":
         # Amber banner for inconclusive / uncertain predictions (no fake plume!)
         overlay = img_bgr.copy()
