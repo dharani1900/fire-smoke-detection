@@ -37,7 +37,7 @@ export const Sidebar: React.FC = () => {
         </div>
         <div>
           <h1 className="font-bold text-sm text-white tracking-wide uppercase">ChemCabinet AI</h1>
-          <p className="text-xs text-slate-400">Gas Exfiltration Monitor</p>
+          <p className="text-xs text-slate-400">Fire & Smoke Hazard Monitor</p>
         </div>
       </div>
 
@@ -46,7 +46,7 @@ export const Sidebar: React.FC = () => {
         <div className="m-3 p-3 bg-red-950 border border-red-600 rounded-lg animate-pulse-danger flex flex-col space-y-2">
           <div className="flex items-center space-x-2 text-red-400 font-bold text-xs uppercase">
             <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-            <span>Leakage Alarm Active!</span>
+            <span>Hazard Alarm Active!</span>
           </div>
           <button 
             onClick={stopAlarm}
@@ -83,8 +83,8 @@ export const Sidebar: React.FC = () => {
 
       {/* Scientific Limitation Footer Note */}
       <div className="p-3 mx-3 mb-3 bg-slate-950 border border-slate-800 rounded-lg text-[11px] text-slate-400 leading-tight">
-        <span className="font-bold text-amber-400 block mb-1">ChemCabinet AI</span>
-        Chemical storage cabinet visual safety and simulated gas exfiltration monitoring.
+        <span className="font-bold text-amber-400 block mb-1">Optical RGB AI</span>
+        Visible fire and smoke hazard detection. Optical cameras cannot detect invisible chemical gases.
       </div>
 
       {/* User Footer */}

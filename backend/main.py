@@ -350,7 +350,7 @@ def get_detections(
             query = query.filter(DetectionRecord.prediction.in_(["hazard_detected", "leakage"]))
         elif status_filter in ("normal", "no_leakage"):
             query = query.filter(DetectionRecord.prediction.in_(["normal", "no_leakage"]))
-        elif status_filter in ("uncertain", "inconclusive", "outside_validated_domain"):
+        elif status_filter in ("uncertain", "inconclusive", "outside_validated_domain", "unable_to_determine"):
             query = query.filter(DetectionRecord.prediction.in_(["uncertain", "outside_validated_domain"]))
         else:
             query = query.filter(DetectionRecord.prediction == status_filter)

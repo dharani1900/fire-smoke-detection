@@ -12,7 +12,8 @@ import {
   Sliders,
   CheckCircle2,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  Info
 } from 'lucide-react';
 
 import api, { resolveImageUrl } from '../services/api';
@@ -132,14 +133,21 @@ export const DetectionDetailPage: React.FC = () => {
             </span>
             <h2 className="text-2xl font-black tracking-tight mt-1">
               {record.prediction === 'hazard_detected'
-                ? 'FIRE / SMOKE HAZARD DETECTED'
-                : record.prediction === 'outside_validated_domain'
-                ? 'OUTSIDE VALIDATED DOMAIN — RESULT INCONCLUSIVE'
-                : record.prediction === 'uncertain'
-                ? 'UNCERTAIN — MANUAL INSPECTION REQUIRED'
-                : 'NO VISIBLE FIRE / SMOKE DETECTED'}
+                ? 'DANGER'
+                : record.prediction === 'outside_validated_domain' || record.prediction === 'uncertain'
+                ? 'UNABLE TO DETERMINE'
+                : 'NO VISIBLE FIRE/SMOKE DETECTED'}
             </h2>
-            <p className="text-xs text-white/90 mt-0.5">
+            <p className="text-xs text-white/90 mt-0.5 font-medium">
+              {record.prediction === 'hazard_detected'
+                ? 'Visible Fire or Smoke Hazard Detected within Validated Maritime Domain'
+                : record.prediction === 'outside_validated_domain'
+                ? 'Input outside validated maritime domain — manual inspection required (alarm suppressed)'
+                : record.prediction === 'uncertain'
+                ? 'Confidence below decision threshold — manual inspection required (alarm suppressed)'
+                : 'Optical fire & smoke RGB check passed — no visible flame or plume identified'}
+            </p>
+            <p className="text-[11px] text-white/70 mt-1">
               Evaluated on {new Date(record.timestamp).toLocaleString()}
             </p>
           </div>
@@ -158,6 +166,29 @@ export const DetectionDetailPage: React.FC = () => {
           )}
         </div>
       </div>
+
+      {/* Honest Safety Callout based on result state */}
+      {record.prediction !== 'hazard_detected' && (
+        <div className={`p-4 rounded-xl border text-xs flex items-start space-x-3 ${
+          record.prediction === 'outside_validated_domain' || record.prediction === 'uncertain'
+            ? 'bg-amber-50 border-amber-300 text-amber-900'
+            : 'bg-emerald-50 border-emerald-300 text-emerald-900'
+        }`}>
+          <Info className="w-5 h-5 flex-shrink-0 mt-0.5" />
+          <div className="space-y-1">
+            <p className="font-bold">
+              {record.prediction === 'outside_validated_domain' || record.prediction === 'uncertain'
+                ? 'Inconclusive Result Notice — Acoustic Alarm Suppressed'
+                : 'Safety & Scope Notice: Optical Monitoring Scope'}
+            </p>
+            <p className="leading-relaxed">
+              {record.prediction === 'outside_validated_domain' || record.prediction === 'uncertain'
+                ? 'This model is strictly trained for maritime surface fire and smoke detection. Non-maritime scenes (such as indoor chemical storage cabinets) or ambiguous visual patterns cannot be reliably assessed by this neural network. For safety, this result is marked inconclusive and the acoustic hazard alarm remains silent.'
+                : 'Optical camera monitoring detects visible fire and smoke only. This scan does NOT establish whether an area or cabinet is safe, gas-free, or free of leaks, as optical RGB cameras cannot detect odorless, colorless, or toxic gases. Dedicated chemical and gas sensors are required for leak verification.'}
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Domain Validation Info Card (if present) */}
       {record.domain_validation && (
@@ -230,12 +261,12 @@ export const DetectionDetailPage: React.FC = () => {
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
               <span>
                 {record.prediction === 'hazard_detected'
-                  ? 'Illustrative Simulation Overlay (Not a gas measurement)'
+                  ? 'Illustrative Simulation Overlay (Visual reference only; not a physical sensor measurement)'
                   : record.prediction === 'outside_validated_domain'
                   ? 'Inspection Status Overlay (Outside Validated Domain - No plume simulated)'
                   : record.prediction === 'uncertain'
                   ? 'Inspection Status Overlay (Inconclusive - No plume simulated)'
-                  : 'Inspection Status Overlay (Nominal Safe Status)'}
+                  : 'Inspection Status Overlay (No Visible Fire/Smoke Detected)'}
               </span>
             </p>
             <div className="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center min-h-[320px]">

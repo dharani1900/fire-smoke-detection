@@ -56,13 +56,13 @@ export const ProfilePage: React.FC = () => {
           <div className="bg-red-50 p-4 rounded-xl border border-red-200 text-center space-y-1">
             <Flame className="w-6 h-6 text-red-600 mx-auto" />
             <p className="text-2xl font-black text-red-700">{stats?.leakage_predictions || 0}</p>
-            <p className="text-xs font-semibold text-red-600 uppercase">Hazard Warnings</p>
+            <p className="text-xs font-semibold text-red-600 uppercase">DANGER Alerts</p>
           </div>
 
           <div className="bg-emerald-50 p-4 rounded-xl border border-emerald-200 text-center space-y-1">
             <ShieldCheck className="w-6 h-6 text-emerald-600 mx-auto" />
             <p className="text-2xl font-black text-emerald-700">{stats?.safe_predictions || 0}</p>
-            <p className="text-xs font-semibold text-emerald-600 uppercase">Safe Status Scans</p>
+            <p className="text-xs font-semibold text-emerald-600 uppercase">No Visible Hazard Scans</p>
           </div>
         </div>
       </div>

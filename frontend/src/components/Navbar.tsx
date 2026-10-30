@@ -28,7 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({ title }) => {
     <header className="bg-white border-b border-slate-200 px-6 py-3.5 flex items-center justify-between shadow-sm" onClick={unlockAudio}>
       <div>
         <h2 className="text-lg font-bold text-slate-800 tracking-tight">{title}</h2>
-        <p className="text-xs text-slate-500">Smart Chemical Storage Cabinet Gas Exfiltration Monitoring</p>
+        <p className="text-xs text-slate-500">Optical Fire & Smoke Hazard Monitoring System</p>
       </div>
 
       <div className="flex items-center space-x-4">

@@ -34,7 +34,7 @@ def generate_hazard_visualization(
         combined = cv2.addWeighted(overlay, 0.92, img_bgr, 0.08, 0)
         cv2.putText(
             combined,
-            "OUTSIDE VALIDATED DOMAIN - RESULT INCONCLUSIVE; MANUAL INSPECTION REQUIRED",
+            "UNABLE TO DETERMINE -- OUTSIDE VALIDATED DOMAIN",
             (15, height - int(banner_h * 0.48)),
             cv2.FONT_HERSHEY_SIMPLEX,
             max(0.40, width / 1300.0),
@@ -44,7 +44,7 @@ def generate_hazard_visualization(
         )
         cv2.putText(
             combined,
-            "Model validated on maritime imagery only. Indoor chemical storage requires physical sensors.",
+            "Trained on maritime imagery only. Cannot evaluate indoor chemical storage.",
             (15, height - int(banner_h * 0.16)),
             cv2.FONT_HERSHEY_SIMPLEX,
             max(0.33, width / 1550.0),
@@ -65,7 +65,7 @@ def generate_hazard_visualization(
         combined = cv2.addWeighted(overlay, 0.90, img_bgr, 0.10, 0)
         cv2.putText(
             combined,
-            "INCONCLUSIVE / UNCERTAIN - MANUAL INSPECTION REQUIRED",
+            "UNABLE TO DETERMINE -- AMBIGUOUS VISUAL PATTERN",
             (15, height - int(banner_h * 0.45)),
             cv2.FONT_HERSHEY_SIMPLEX,
             max(0.42, width / 1250.0),
@@ -75,7 +75,7 @@ def generate_hazard_visualization(
         )
         cv2.putText(
             combined,
-            "Confidence below 65% threshold. RGB camera cannot detect invisible vapors.",
+            "Confidence below 65% threshold. Manual inspection required.",
             (15, height - int(banner_h * 0.15)),
             cv2.FONT_HERSHEY_SIMPLEX,
             max(0.34, width / 1500.0),
@@ -96,20 +96,20 @@ def generate_hazard_visualization(
         combined = cv2.addWeighted(overlay, 0.90, img_bgr, 0.10, 0)
         cv2.putText(
             combined,
-            "SAFE STATUS - NO VISIBLE FIRE OR SMOKE DETECTED",
+            "NO VISIBLE FIRE/SMOKE DETECTED (Validated Maritime Domain)",
             (15, height - int(banner_h * 0.45)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            max(0.42, width / 1250.0),
+            max(0.40, width / 1300.0),
             (255, 255, 255),
             2,
             cv2.LINE_AA
         )
         cv2.putText(
             combined,
-            "Optical RGB evaluation nominal. Does not measure chemical gas concentration.",
+            "Optical check nominal. Does NOT establish gas concentration or detect invisible vapors.",
             (15, height - int(banner_h * 0.15)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            max(0.34, width / 1500.0),
+            max(0.33, width / 1550.0),
             (240, 240, 240),
             1,
             cv2.LINE_AA

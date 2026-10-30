@@ -104,36 +104,41 @@ export const DashboardPage: React.FC = () => {
         />
 
         <StatCard
-          title="Hazard Alerts"
+          title="DANGER Alerts"
           value={stats.leakage_predictions || 0}
-          subtitle="Confirmed Hazards"
+          subtitle="Visible Fire / Smoke"
           icon={ShieldAlert}
           color="red"
           badgeText="Action Recommended"
         />
 
         <StatCard
-          title="Nominal / Safe"
+          title="No Visible Hazard"
           value={stats.safe_predictions || 0}
-          subtitle="Nominal Indications"
+          subtitle="Optical Check Nominal"
           icon={ShieldCheck}
           color="green"
-          badgeText="Nominal Status"
+          badgeText="In Validated Domain"
         />
 
         <StatCard
           title="Latest Detection"
-          value={stats.latest_detection ? (stats.latest_detection.prediction === 'outside_validated_domain' ? 'OUTSIDE DOMAIN' : stats.latest_detection.prediction.toUpperCase()) : 'N/A'}
+          value={
+            !stats.latest_detection ? 'N/A' :
+            (stats.latest_detection.prediction === 'hazard_detected' || stats.latest_detection.prediction === 'leakage') ? 'DANGER' :
+            (stats.latest_detection.prediction === 'normal' || stats.latest_detection.prediction === 'no_leakage') ? 'NO VISIBLE HAZARD' :
+            'UNABLE TO DETERMINE'
+          }
           subtitle={stats.latest_detection ? new Date(stats.latest_detection.timestamp).toLocaleTimeString() : 'No scans yet'}
           icon={Clock}
-          color={stats.latest_detection?.prediction === 'hazard_detected' || stats.latest_detection?.prediction === 'leakage' ? 'red' : (stats.latest_detection?.prediction === 'uncertain' || stats.latest_detection?.prediction === 'outside_validated_domain') ? 'amber' : 'indigo'}
+          color={stats.latest_detection?.prediction === 'hazard_detected' || stats.latest_detection?.prediction === 'leakage' ? 'red' : (stats.latest_detection?.prediction === 'normal' || stats.latest_detection?.prediction === 'no_leakage') ? 'green' : 'amber'}
           badgeText={stats.latest_detection ? `Conf: ${(stats.latest_detection.confidence * 100).toFixed(1)}%` : 'Ready'}
         />
 
         <StatCard
           title="Alarm Status"
           value={stats.alarm_status?.toUpperCase() || 'SILENT'}
-          subtitle="Browser Alert Engine"
+          subtitle="Audio Siren Engine"
           icon={Volume2}
           color={stats.alarm_status === 'active' ? 'amber' : 'purple'}
           badgeText={stats.alarm_status === 'active' ? 'Alert Active' : 'Standby Mode'}
@@ -145,7 +150,7 @@ export const DashboardPage: React.FC = () => {
           subtitle="MobileNetV2 Model"
           icon={Cpu}
           color="purple"
-          badgeText="Custom Fine-Tuned"
+          badgeText="Maritime Validated"
         />
       </div>
 
@@ -155,8 +160,8 @@ export const DashboardPage: React.FC = () => {
         <div className="lg:col-span-2 bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="flex items-center justify-between border-b border-slate-100 pb-3">
             <div>
-              <h3 className="font-bold text-slate-800 text-sm">Cabinet Inspection Timeline</h3>
-              <p className="text-xs text-slate-500">Daily frequency of safe status vs leakage alerts</p>
+              <h3 className="font-bold text-slate-800 text-sm">Optical Inspection Timeline</h3>
+              <p className="text-xs text-slate-500">Daily frequency of DANGER alerts, normal conditions, and inconclusive scans</p>
             </div>
             <span className="text-[11px] bg-slate-100 text-slate-600 font-mono px-2 py-1 rounded">Daily Activity</span>
           </div>
@@ -171,8 +176,8 @@ export const DashboardPage: React.FC = () => {
                 />
                 <Legend wrapperStyle={{ fontSize: '12px', paddingTop: '10px' }} />
                 <Line type="monotone" dataKey="total" name="Total Scans" stroke="#3b82f6" strokeWidth={2} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="leakage" name="Leakage Alerts" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
-                <Line type="monotone" dataKey="safe" name="Safe Status" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="leakage" name="DANGER Alerts" stroke="#ef4444" strokeWidth={2} dot={{ r: 4 }} />
+                <Line type="monotone" dataKey="safe" name="No Visible Hazard" stroke="#10b981" strokeWidth={2} dot={{ r: 4 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
@@ -251,22 +256,17 @@ export const DashboardPage: React.FC = () => {
                       {record.prediction === 'hazard_detected' || record.prediction === 'leakage' ? (
                         <span className="inline-flex items-center space-x-1 bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full border border-red-300">
                           <AlertTriangle className="w-3 h-3 text-red-600" />
-                          <span>Hazard Alert</span>
+                          <span>DANGER</span>
                         </span>
-                      ) : record.prediction === 'outside_validated_domain' ? (
+                      ) : record.prediction === 'outside_validated_domain' || record.prediction === 'uncertain' ? (
                         <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-full border border-amber-300">
                           <AlertTriangle className="w-3 h-3 text-amber-600" />
-                          <span>Outside Domain</span>
-                        </span>
-                      ) : record.prediction === 'uncertain' ? (
-                        <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-full border border-amber-300">
-                          <AlertTriangle className="w-3 h-3 text-amber-600" />
-                          <span>Uncertain</span>
+                          <span>UNABLE TO DETERMINE</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1 rounded-full border border-emerald-300">
                           <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                          <span>Safe Status</span>
+                          <span>NO VISIBLE HAZARD</span>
                         </span>
                       )}
                     </td>

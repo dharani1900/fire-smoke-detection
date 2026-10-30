@@ -50,7 +50,10 @@ export const DetectionHistoryPage: React.FC = () => {
       if (statusFilter !== 'all') {
         dHistory = dHistory.filter(r => {
           if (statusFilter === 'hazard_detected' || statusFilter === 'leakage') return isHazard(r.prediction);
-          if (statusFilter === 'normal' || statusFilter === 'no_leakage') return !isHazard(r.prediction);
+          if (statusFilter === 'normal' || statusFilter === 'no_leakage') return r.prediction === 'normal';
+          if (statusFilter === 'unable_to_determine' || statusFilter === 'inconclusive' || statusFilter === 'uncertain') {
+            return r.prediction === 'uncertain' || r.prediction === 'outside_validated_domain';
+          }
           return r.prediction === statusFilter;
         });
       }
@@ -134,11 +137,10 @@ export const DetectionHistoryPage: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value)}
               className="bg-transparent font-bold text-slate-800 focus:outline-none"
             >
-              <option value="all">All Predictions</option>
-              <option value="hazard_detected">Hazard Alerts Only</option>
-              <option value="normal">Safe Scans Only</option>
-              <option value="uncertain">Inconclusive / Uncertain Only</option>
-              <option value="outside_validated_domain">Outside Validated Domain Only</option>
+              <option value="all">All Results</option>
+              <option value="hazard_detected">DANGER Alerts Only</option>
+              <option value="normal">No Visible Fire/Smoke Only</option>
+              <option value="unable_to_determine">Unable to Determine Only</option>
             </select>
           </div>
 
@@ -207,22 +209,17 @@ export const DetectionHistoryPage: React.FC = () => {
                   {record.prediction === 'hazard_detected' || record.prediction === 'leakage' ? (
                     <span className="inline-flex items-center space-x-1 bg-red-100 text-red-700 font-bold text-xs px-2.5 py-1 rounded-full border border-red-300">
                       <Flame className="w-3.5 h-3.5 text-red-600" />
-                      <span>Hazard Alert</span>
+                      <span>DANGER</span>
                     </span>
-                  ) : record.prediction === 'outside_validated_domain' ? (
+                  ) : record.prediction === 'outside_validated_domain' || record.prediction === 'uncertain' ? (
                     <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">
                       <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Outside Domain</span>
-                    </span>
-                  ) : record.prediction === 'uncertain' ? (
-                    <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">
-                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
-                      <span>Inconclusive</span>
+                      <span>UNABLE TO DETERMINE</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-full border border-emerald-300">
                       <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Safe Status</span>
+                      <span>NO VISIBLE HAZARD</span>
                     </span>
                   )}
 

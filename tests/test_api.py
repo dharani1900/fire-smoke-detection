@@ -230,5 +230,46 @@ class TestInferencePipeline(unittest.TestCase):
             self.assertTrue(res["risk_assessment"]["alarm_triggered"])
             self.assertTrue(res["domain_validation"]["is_valid_domain"])
 
+    def test_tristate_detection_mapping_and_safety_notices(self):
+        """
+        Verifies the tri-state UI contract:
+        1. DANGER: Validated domain fire/smoke hazard triggers alarm.
+        2. NO VISIBLE FIRE/SMOKE: Validated domain normal scan does NOT trigger alarm,
+           and includes limitations notice clarifying optical RGB checks only.
+        3. UNABLE TO DETERMINE: OOD or low confidence is marked inconclusive,
+           and alarm remains strictly silent.
+        """
+        import glob
+        haz_images = glob.glob(os.path.join(project_dir, "dataset", "test", "hazard_detected", "*.jpg"))
+        norm_images = glob.glob(os.path.join(project_dir, "dataset", "test", "normal", "*.jpg"))
+        uploaded_images = glob.glob(r"C:\Users\DHARANI\.gemini\antigravity\brain\82cbd9cc-aaf8-4645-bacf-40b0120862db\.user_uploaded\*.png")
+
+        # 1. DANGER state
+        if haz_images:
+            res_danger = self.predictor.predict_image(haz_images[0], target_domain="maritime")
+            self.assertEqual(res_danger["predicted_class"], "hazard_detected")
+            self.assertTrue(res_danger["risk_assessment"]["alarm_triggered"])
+
+        # 2. NO VISIBLE FIRE/SMOKE state
+        if norm_images:
+            res_normal = self.predictor.predict_image(norm_images[0], target_domain="maritime")
+            self.assertEqual(res_normal["predicted_class"], "normal")
+            self.assertFalse(res_normal["risk_assessment"]["alarm_triggered"])
+            self.assertIn("limitations_notice", res_normal)
+            self.assertIn("does not measure chemical gas concentrations", res_normal["limitations_notice"])
+
+        # 3. UNABLE TO DETERMINE state (indoor cabinet)
+        if uploaded_images:
+            res_cabinet = self.predictor.predict_image(uploaded_images[0], target_domain="auto")
+            self.assertIn(res_cabinet["predicted_class"], ["outside_validated_domain", "uncertain"])
+            self.assertFalse(res_cabinet["risk_assessment"]["alarm_triggered"])
+            self.assertEqual(res_cabinet["severity"], "Inconclusive")
+
+    def test_status_filter_unable_to_determine(self):
+        """Verifies that the backend status filter supports 'unable_to_determine' query."""
+        results = main.get_detections(status_filter="unable_to_determine", db=self.db)
+        for r in results:
+            self.assertIn(r["prediction"], ["outside_validated_domain", "uncertain"])
+
 if __name__ == "__main__":
     unittest.main()
