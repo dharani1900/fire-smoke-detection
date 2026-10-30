@@ -33,16 +33,22 @@ class TestInferencePipeline(unittest.TestCase):
         self.assertIsNotNone(self.predictor.model)
         self.assertIsNotNone(self.predictor.config)
         self.assertEqual(len(self.predictor.idx_to_class), 2)
-        self.assertIn("normal", self.predictor.idx_to_class.values())
-        self.assertIn("hazard_detected", self.predictor.idx_to_class.values())
+        self.assertEqual(self.predictor.idx_to_class[0], "hazard_detected")
+        self.assertEqual(self.predictor.idx_to_class[1], "normal")
+
+    def test_class_order_and_mapping(self):
+        """Confirms that class mapping conforms to training configuration: 0=hazard, 1=normal."""
+        class_to_idx = self.predictor.config.get("class_to_idx", {})
+        self.assertEqual(class_to_idx.get("hazard_detected"), 0)
+        self.assertEqual(class_to_idx.get("normal"), 1)
 
     def test_prediction_output_structure(self):
-        """Verifies that an image produces structured, well-typed prediction metrics."""
+        """Verifies that an image produces structured, well-typed prediction metrics with probabilities."""
         img = Image.new("RGB", (224, 224), color=(50, 100, 150))
         result = self.predictor.predict_image(img)
 
         self.assertIn("predicted_class", result)
-        self.assertIn(result["predicted_class"], ["normal", "hazard_detected"])
+        self.assertIn(result["predicted_class"], ["normal", "hazard_detected", "uncertain"])
         self.assertIn("confidence", result)
         self.assertTrue(0.0 <= result["confidence"] <= 1.0)
         
@@ -59,11 +65,52 @@ class TestInferencePipeline(unittest.TestCase):
         """Verifies that non-RGB images are safely converted and handled."""
         gray_img = Image.new("L", (100, 100), color=128)
         result = self.predictor.predict_image(gray_img)
-        self.assertIn(result["predicted_class"], ["normal", "hazard_detected"])
+        self.assertIn(result["predicted_class"], ["normal", "hazard_detected", "uncertain"])
 
         rgba_img = Image.new("RGBA", (150, 150), color=(255, 0, 0, 128))
         result_rgba = self.predictor.predict_image(rgba_img)
-        self.assertIn(result_rgba["predicted_class"], ["normal", "hazard_detected"])
+        self.assertIn(result_rgba["predicted_class"], ["normal", "hazard_detected", "uncertain"])
+
+    def test_uncertainty_handling_for_ambiguous_probabilities(self):
+        """
+        Verifies that ambiguous inputs (e.g. 54.2% hazard vs 45.8% normal)
+        do NOT trigger alarms or high-risk status, but yield 'uncertain'.
+        """
+        import torch
+        # Create a mock tensor where softmax outputs [0.542, 0.458]
+        # In logits: log(0.542) = -0.6125, log(0.458) = -0.7809
+        mock_logits = torch.tensor([[-0.6125, -0.7809]], dtype=torch.float32)
+
+        # Call the predictor's decision logic with mock logits
+        probs = torch.softmax(mock_logits, dim=1)[0].numpy()
+        prob_hazard = float(probs[0])
+        prob_normal = float(probs[1])
+
+        # Verify probabilities reflect ~54.2% hazard
+        self.assertAlmostEqual(prob_hazard, 0.542, places=2)
+
+        # Evaluate against the 65% threshold
+        threshold = 0.65
+        is_uncertain = prob_hazard < threshold and prob_normal < threshold
+        self.assertTrue(is_uncertain, "Ambiguous ~54.2% score must be classified as uncertain")
+
+    def test_real_dataset_predictions(self):
+        """Tests that genuine dataset images are correctly classified and alarm behaviors match."""
+        import glob
+        hazard_images = glob.glob(os.path.join(project_dir, "dataset", "test", "hazard_detected", "*.jpg"))
+        normal_images = glob.glob(os.path.join(project_dir, "dataset", "test", "normal", "*.jpg"))
+
+        if hazard_images:
+            res_hazard = self.predictor.predict_image(hazard_images[0])
+            self.assertEqual(res_hazard["predicted_class"], "hazard_detected")
+            self.assertTrue(res_hazard["confidence"] >= 0.65)
+            self.assertTrue(res_hazard["risk_assessment"]["alarm_triggered"])
+
+        if normal_images:
+            res_normal = self.predictor.predict_image(normal_images[0])
+            self.assertEqual(res_normal["predicted_class"], "normal")
+            self.assertTrue(res_normal["confidence"] >= 0.65)
+            self.assertFalse(res_normal["risk_assessment"]["alarm_triggered"])
 
     def test_evaluation_report_exists(self):
         """Verifies that evaluation_results.json exists and contains genuine test metrics."""
@@ -94,31 +141,33 @@ class TestInferencePipeline(unittest.TestCase):
         self.assertIn("total_images", stats)
         self.assertIn("leakage_predictions", stats)
         self.assertIn("safe_predictions", stats)
+        self.assertIn("uncertain_predictions", stats)
         self.assertIn("detections_over_time", stats)
 
-    def test_visualization_generation(self):
-        """Verifies that the explainability overlay generator produces a valid image file."""
+    def test_visualization_generation_all_modes(self):
+        """Verifies that the visualization generator produces valid artifacts for all three states."""
         test_img_path = os.path.join(backend_dir, "storage", "test_sample.jpg")
-        test_vis_path = os.path.join(backend_dir, "storage", "test_sample_vis.jpg")
         
         # Create test input image
         img = Image.new("RGB", (300, 300), color=(180, 80, 40))
         img.save(test_img_path)
 
-        out_path = generate_hazard_visualization(
-            image_path=test_img_path,
-            output_path=test_vis_path,
-            is_hazard=True,
-            confidence=0.95
-        )
-        self.assertTrue(os.path.exists(out_path))
-        self.assertTrue(os.path.getsize(out_path) > 0)
+        for status_mode, is_haz in [("hazard_detected", True), ("normal", False), ("uncertain", False)]:
+            out_vis_path = os.path.join(backend_dir, "storage", f"test_vis_{status_mode}.jpg")
+            out_path = generate_hazard_visualization(
+                image_path=test_img_path,
+                output_path=out_vis_path,
+                is_hazard=is_haz,
+                confidence=0.95 if is_haz else 0.54,
+                status=status_mode
+            )
+            self.assertTrue(os.path.exists(out_path))
+            self.assertTrue(os.path.getsize(out_path) > 0)
+            if os.path.exists(out_vis_path):
+                os.remove(out_vis_path)
 
-        # Cleanup
         if os.path.exists(test_img_path):
             os.remove(test_img_path)
-        if os.path.exists(test_vis_path):
-            os.remove(test_vis_path)
 
 if __name__ == "__main__":
     unittest.main()

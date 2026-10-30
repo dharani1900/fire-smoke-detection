@@ -145,7 +145,9 @@ export async function processDemoAnalyze(file: File, notes?: string): Promise<De
     reader.readAsDataURL(file);
   });
 
-  const isHazard = file.name.toLowerCase().includes('fire') || file.name.toLowerCase().includes('smoke') || Math.random() > 0.45;
+  // Only simulate hazard if filename explicitly mentions fire/flame/smoke
+  const lowerName = file.name.toLowerCase();
+  const isHazard = lowerName.includes('fire') || lowerName.includes('flame') || lowerName.includes('smoke');
   const visDataUrl = await generateClientSidePlumeOverlay(originalDataUrl, isHazard);
 
   const history = getDemoHistory();
@@ -155,14 +157,14 @@ export async function processDemoAnalyze(file: File, notes?: string): Promise<De
     original_image_path: originalDataUrl,
     visualization_image_path: visDataUrl,
     prediction: isHazard ? 'hazard_detected' : 'normal',
-    confidence: isHazard ? 0.971 : 0.988,
-    mode: 'trained_model',
-    visualization_type: 'gradcam_or_simulated',
-    severity: isHazard ? 'High' : 'None',
-    alarm_recommended: isHazard,
-    alarm_activated: isHazard,
-    model_version: 'MobileNetV2-v1.0',
-    notes: notes || 'Optical Hazard Evaluation',
+    confidence: isHazard ? 0.885 : 0.942,
+    mode: 'demo_mode', // Explicitly marked as demo simulation
+    visualization_type: 'illustrative_simulation',
+    severity: isHazard ? 'Medium' : 'None',
+    alarm_recommended: false, // Never trigger emergency siren on offline demo fallback
+    alarm_activated: false,
+    model_version: 'Demo-Offline-v1.0',
+    notes: notes ? `${notes} [Offline Demo Preview]` : '[Offline Demo Preview - No Backend]',
     timestamp: new Date().toISOString()
   };
 

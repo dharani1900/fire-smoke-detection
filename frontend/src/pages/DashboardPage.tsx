@@ -68,9 +68,9 @@ export const DashboardPage: React.FC = () => {
       {/* Header & Quick Action Banner */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-xl border border-slate-200 shadow-sm">
         <div>
-          <h1 className="text-xl font-bold text-slate-900">Chemical Cabinet Gas Exfiltration Overview</h1>
+          <h1 className="text-xl font-bold text-slate-900">Optical Fire & Smoke Monitoring Overview</h1>
           <p className="text-xs text-slate-500 mt-1">
-            Real-time status tracking and MobileNetV2 visual exfiltration & hazard classification alerts.
+            Real-time status tracking and MobileNetV2 optical fire & smoke hazard classification alerts.
           </p>
         </div>
         <div className="flex items-center space-x-3">
@@ -87,7 +87,7 @@ export const DashboardPage: React.FC = () => {
             className="bg-blue-600 hover:bg-blue-700 text-white font-bold text-sm px-4 py-2.5 rounded-lg shadow-sm flex items-center space-x-2 transition"
           >
             <Upload className="w-4 h-4" />
-            <span>Analyse Cabinet Image</span>
+            <span>Analyse Inspection Image</span>
           </Link>
         </div>
       </div>
@@ -104,16 +104,16 @@ export const DashboardPage: React.FC = () => {
         />
 
         <StatCard
-          title="Leakage Warnings"
+          title="Hazard Alerts"
           value={stats.leakage_predictions || 0}
-          subtitle="Exfiltration Alerts"
+          subtitle="Confirmed Hazards"
           icon={ShieldAlert}
           color="red"
           badgeText="Action Recommended"
         />
 
         <StatCard
-          title="Safe Cabinets"
+          title="Nominal / Safe"
           value={stats.safe_predictions || 0}
           subtitle="Nominal Indications"
           icon={ShieldCheck}
@@ -126,7 +126,7 @@ export const DashboardPage: React.FC = () => {
           value={stats.latest_detection ? stats.latest_detection.prediction.toUpperCase() : 'N/A'}
           subtitle={stats.latest_detection ? new Date(stats.latest_detection.timestamp).toLocaleTimeString() : 'No scans yet'}
           icon={Clock}
-          color={stats.latest_detection?.prediction === 'hazard_detected' || stats.latest_detection?.prediction === 'leakage' ? 'red' : 'indigo'}
+          color={stats.latest_detection?.prediction === 'hazard_detected' || stats.latest_detection?.prediction === 'leakage' ? 'red' : stats.latest_detection?.prediction === 'uncertain' ? 'amber' : 'indigo'}
           badgeText={stats.latest_detection ? `Conf: ${(stats.latest_detection.confidence * 100).toFixed(1)}%` : 'Ready'}
         />
 
@@ -181,7 +181,7 @@ export const DashboardPage: React.FC = () => {
         {/* Bar Chart: Distribution */}
         <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm space-y-4">
           <div className="border-b border-slate-100 pb-3">
-            <h3 className="font-bold text-slate-800 text-sm">Exfiltration Prediction Distribution</h3>
+            <h3 className="font-bold text-slate-800 text-sm">Optical Inspection Prediction Distribution</h3>
             <p className="text-xs text-slate-500">Aggregate scan breakdown</p>
           </div>
           <div className="h-64 w-full flex items-center justify-center">
@@ -208,8 +208,8 @@ export const DashboardPage: React.FC = () => {
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="p-5 border-b border-slate-200 flex items-center justify-between">
           <div>
-            <h3 className="font-bold text-slate-800 text-sm">Recent Cabinet Inspection Scan Log</h3>
-            <p className="text-xs text-slate-500">Most recent chemical cabinet evaluations</p>
+            <h3 className="font-bold text-slate-800 text-sm">Recent Inspection Scan Log</h3>
+            <p className="text-xs text-slate-500">Most recent optical evaluation records</p>
           </div>
           <Link to="/history" className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center space-x-1">
             <span>View Full History</span>
@@ -219,7 +219,7 @@ export const DashboardPage: React.FC = () => {
 
         {recentScans.length === 0 ? (
           <div className="p-8 text-center text-slate-500 text-sm">
-            No inspection records found. Click <strong>Analyse Cabinet Image</strong> to evaluate your first image.
+            No inspection records found. Click <strong>Analyse Inspection Image</strong> to evaluate your first image.
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -251,7 +251,12 @@ export const DashboardPage: React.FC = () => {
                       {record.prediction === 'hazard_detected' || record.prediction === 'leakage' ? (
                         <span className="inline-flex items-center space-x-1 bg-red-100 text-red-700 font-bold px-2.5 py-1 rounded-full border border-red-300">
                           <AlertTriangle className="w-3 h-3 text-red-600" />
-                          <span>Leakage Alert</span>
+                          <span>Hazard Alert</span>
+                        </span>
+                      ) : record.prediction === 'uncertain' ? (
+                        <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold px-2.5 py-1 rounded-full border border-amber-300">
+                          <AlertTriangle className="w-3 h-3 text-amber-600" />
+                          <span>Uncertain</span>
                         </span>
                       ) : (
                         <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-700 font-bold px-2.5 py-1 rounded-full border border-emerald-300">

@@ -11,7 +11,8 @@ import {
   FileText,
   Sliders,
   CheckCircle2,
-  Sparkles
+  Sparkles,
+  AlertTriangle
 } from 'lucide-react';
 
 import api, { resolveImageUrl } from '../services/api';
@@ -109,18 +110,32 @@ export const DetectionDetailPage: React.FC = () => {
 
       {/* Primary Header Card */}
       <div className={`p-6 rounded-2xl text-white shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-4 ${
-        hazard ? 'bg-red-600 border-2 border-red-700' : 'bg-emerald-600 border-2 border-emerald-700'
+        record.prediction === 'hazard_detected'
+          ? 'bg-red-600 border-2 border-red-700'
+          : record.prediction === 'uncertain'
+          ? 'bg-amber-600 border-2 border-amber-700'
+          : 'bg-emerald-600 border-2 border-emerald-700'
       }`}>
         <div className="flex items-center space-x-4">
           <div className="bg-white/20 p-3 rounded-2xl">
-            {hazard ? <Flame className="w-8 h-8 text-white" /> : <ShieldCheck className="w-8 h-8 text-white" />}
+            {record.prediction === 'hazard_detected' ? (
+              <Flame className="w-8 h-8 text-white" />
+            ) : record.prediction === 'uncertain' ? (
+              <AlertTriangle className="w-8 h-8 text-white" />
+            ) : (
+              <ShieldCheck className="w-8 h-8 text-white" />
+            )}
           </div>
           <div>
             <span className="bg-white/20 text-white font-mono text-[11px] px-2.5 py-0.5 rounded uppercase tracking-wider font-bold">
               Scan ID #{record.id}
             </span>
             <h2 className="text-2xl font-black tracking-tight mt-1">
-              {hazard ? 'FIRE / SMOKE HAZARD DETECTED' : 'SAFE FACILITY STATUS'}
+              {record.prediction === 'hazard_detected'
+                ? 'FIRE / SMOKE HAZARD DETECTED'
+                : record.prediction === 'uncertain'
+                ? 'UNCERTAIN — MANUAL INSPECTION REQUIRED'
+                : 'NO VISIBLE FIRE / SMOKE DETECTED'}
             </h2>
             <p className="text-xs text-white/90 mt-0.5">
               Evaluated on {new Date(record.timestamp).toLocaleString()}
@@ -180,7 +195,13 @@ export const DetectionDetailPage: React.FC = () => {
           <div className="space-y-2">
             <p className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center space-x-1">
               <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-              <span>AI Heatmap & Simulated Hazard Plume</span>
+              <span>
+                {record.prediction === 'hazard_detected'
+                  ? 'Illustrative Simulation Overlay (Not a gas measurement)'
+                  : record.prediction === 'uncertain'
+                  ? 'Inspection Status Overlay (Inconclusive - No plume simulated)'
+                  : 'Inspection Status Overlay (Nominal Safe Status)'}
+              </span>
             </p>
             <div className="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center min-h-[320px]">
               <img

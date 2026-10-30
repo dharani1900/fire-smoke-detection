@@ -103,31 +103,60 @@ class Predictor:
         with torch.no_grad():
             outputs = self.model(tensor)
             probs = torch.softmax(outputs, dim=1)[0].cpu().numpy()
-            pred_idx = int(torch.argmax(outputs, dim=1).item())
+            raw_pred_idx = int(torch.argmax(outputs, dim=1).item())
 
-        predicted_class = self.idx_to_class[pred_idx]
-        confidence = float(probs[pred_idx])
+        prob_hazard = float(probs[0])
+        prob_normal = float(probs[1])
+        raw_predicted_class = self.idx_to_class[raw_pred_idx]
 
         # Format probability distribution
         probabilities = {
-            self.idx_to_class[i]: round(float(probs[i]), 4)
-            for i in range(len(probs))
+            self.idx_to_class[0]: round(prob_hazard, 4),
+            self.idx_to_class[1]: round(prob_normal, 4)
         }
 
-        # Derive operational risk assessment
-        if predicted_class == "hazard_detected":
-            risk_level = "High Risk / Active Hazard"
-            action_recommended = "Immediate visual confirmation required. Deploy safety personnel / verify infrared or sensor data."
+        # Calibrated Decision Thresholds
+        # Binary classification with 50-65% confidence indicates ambiguity / out-of-distribution input
+        CONFIDENCE_THRESHOLD = 0.65
+
+        if prob_hazard >= CONFIDENCE_THRESHOLD:
+            predicted_class = "hazard_detected"
+            confidence = prob_hazard
+            severity = "High" if prob_hazard >= 0.85 else "Medium"
+            risk_level = "High Risk / Active Hazard" if severity == "High" else "Moderate Risk / Visual Confirmation Needed"
             alarm_triggered = True
-        else:
+            action_recommended = (
+                "Visible fire or smoke pattern identified with high confidence. "
+                "Immediate visual confirmation required. Deploy safety personnel / verify sensor data."
+            )
+        elif prob_normal >= CONFIDENCE_THRESHOLD:
+            predicted_class = "normal"
+            confidence = prob_normal
+            severity = "None"
             risk_level = "Nominal / Normal Conditions"
-            action_recommended = "Standard continuous monitoring."
             alarm_triggered = False
+            action_recommended = "No visible fire or smoke indicators detected. Standard continuous monitoring."
+        else:
+            # Low-confidence / Ambiguous zone (e.g. 54.2% hazard vs 45.8% normal)
+            # Never trigger false alarms on out-of-distribution or ambiguous images
+            predicted_class = "uncertain"
+            confidence = max(prob_hazard, prob_normal)
+            severity = "Inconclusive"
+            risk_level = "Inconclusive / Manual Verification Required"
+            alarm_triggered = False
+            action_recommended = (
+                "Visual features are ambiguous or out-of-distribution (confidence below operational 65% threshold). "
+                "Manual visual inspection required. Ordinary RGB cameras cannot detect invisible gases; "
+                "verify with physical chemical sensors."
+            )
 
         return {
             "predicted_class": predicted_class,
+            "raw_prediction": raw_predicted_class,
             "confidence": round(confidence, 4),
             "probabilities": probabilities,
+            "decision_threshold": CONFIDENCE_THRESHOLD,
+            "severity": severity,
             "risk_assessment": {
                 "risk_level": risk_level,
                 "alarm_triggered": alarm_triggered,
@@ -139,9 +168,9 @@ class Predictor:
                 "input_resolution": self.config.get("image_size", [224, 224])
             },
             "limitations_notice": (
-                "Notice: This prediction is based on optical RGB visual patterns (smoke/flame) "
-                "from maritime & industrial imagery. It does not measure chemical gas concentrations "
-                "or detect colorless/invisible hazardous vapors."
+                "Notice: This model evaluates visible optical fire and smoke patterns from industrial "
+                "and maritime imagery. It does not measure chemical gas concentrations, detect colorless "
+                "or invisible vapors, or replace physical gas detection hardware."
             )
         }
 

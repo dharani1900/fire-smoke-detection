@@ -210,6 +210,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
     total_images = len(records)
     hazard_count = sum(1 for r in records if r.prediction in ("hazard_detected", "leakage"))
     safe_count = sum(1 for r in records if r.prediction in ("normal", "no_leakage"))
+    uncertain_count = sum(1 for r in records if r.prediction == "uncertain")
 
     latest = format_detection(records[0]) if records else None
 
@@ -221,17 +222,20 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         day_str = day.strftime("%b %d")
         day_records = [r for r in records if r.timestamp and r.timestamp.date() == day]
         day_hazard = sum(1 for r in day_records if r.prediction in ("hazard_detected", "leakage"))
-        day_safe = len(day_records) - day_hazard
+        day_safe = sum(1 for r in day_records if r.prediction in ("normal", "no_leakage"))
+        day_uncertain = sum(1 for r in day_records if r.prediction == "uncertain")
         detections_over_time.append({
             "date": day_str,
             "total": len(day_records),
             "leakage": day_hazard,
-            "safe": day_safe
+            "safe": day_safe,
+            "uncertain": day_uncertain
         })
 
     prediction_breakdown = [
-        {"name": "Safe / Normal", "value": safe_count, "color": "#10b981"},
-        {"name": "Hazard Alert", "value": hazard_count, "color": "#ef4444"}
+        {"name": "Safe / Nominal", "value": safe_count, "color": "#10b981"},
+        {"name": "Hazard Alert", "value": hazard_count, "color": "#ef4444"},
+        {"name": "Inconclusive", "value": uncertain_count, "color": "#f59e0b"}
     ]
 
     alarm_status = "active" if (latest and latest.get("alarm_recommended")) else "silent"
@@ -240,6 +244,7 @@ def get_dashboard_stats(db: Session = Depends(get_db)):
         "total_images": total_images,
         "leakage_predictions": hazard_count,
         "safe_predictions": safe_count,
+        "uncertain_predictions": uncertain_count,
         "latest_detection": latest,
         "alarm_status": alarm_status,
         "model_status": "trained",
@@ -278,16 +283,17 @@ async def analyze_image(
     confidence = float(inference_result["confidence"])
 
     is_hazard = predicted_class == "hazard_detected"
-    severity = "High" if is_hazard else "None"
-    alarm_recommended = is_hazard
+    severity = inference_result.get("severity") or ("High" if is_hazard else ("Inconclusive" if predicted_class == "uncertain" else "None"))
+    alarm_recommended = inference_result.get("risk_assessment", {}).get("alarm_triggered", is_hazard)
 
-    # Generate explainability overlay
+    # Generate visual artifact with status awareness
     try:
         generate_hazard_visualization(
             image_path=orig_filepath,
             output_path=vis_filepath,
             is_hazard=is_hazard,
-            confidence=confidence
+            confidence=confidence,
+            status=predicted_class
         )
         vis_url = f"/storage/visualizations/{vis_filename}"
     except Exception as e:
@@ -307,7 +313,7 @@ async def analyze_image(
         prediction=predicted_class,
         confidence=confidence,
         mode="trained_model",
-        visualization_type="gradcam_or_simulated",
+        visualization_type="illustrative_simulation",
         severity=severity,
         alarm_recommended=alarm_recommended,
         alarm_activated=alarm_recommended,
@@ -319,7 +325,11 @@ async def analyze_image(
     db.commit()
     db.refresh(new_record)
 
-    return JSONResponse(content=format_detection(new_record))
+    formatted = format_detection(new_record)
+    formatted["probabilities"] = inference_result.get("probabilities", {})
+    formatted["risk_assessment"] = inference_result.get("risk_assessment", {})
+    formatted["limitations_notice"] = inference_result.get("limitations_notice", "")
+    return JSONResponse(content=formatted)
 
 @app.get("/api/detections")
 def get_detections(
@@ -335,6 +345,8 @@ def get_detections(
             query = query.filter(DetectionRecord.prediction.in_(["hazard_detected", "leakage"]))
         elif status_filter in ("normal", "no_leakage"):
             query = query.filter(DetectionRecord.prediction.in_(["normal", "no_leakage"]))
+        elif status_filter == "uncertain":
+            query = query.filter(DetectionRecord.prediction == "uncertain")
         else:
             query = query.filter(DetectionRecord.prediction == status_filter)
 

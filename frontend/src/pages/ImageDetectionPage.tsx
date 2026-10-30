@@ -74,6 +74,7 @@ export const ImageDetectionPage: React.FC = () => {
 
     setLoading(true);
     setError(null);
+    setResult(null);
 
     const formData = new FormData();
     formData.append('file', selectedFile);
@@ -86,22 +87,21 @@ export const ImageDetectionPage: React.FC = () => {
 
       if (res.data && typeof res.data === 'object' && res.data.id) {
         setResult(res.data);
-        if (isHazard(res.data.prediction)) {
+        // Only trigger alarm on confirmed hazards with alarm recommendation
+        if (res.data.prediction === 'hazard_detected' && res.data.alarm_recommended) {
           triggerAlarm();
         }
       } else {
-        throw new Error('Non-JSON analysis response returned');
+        throw new Error('Invalid analysis response received from server.');
       }
     } catch (err: any) {
-      // Fallback to interactive client-side demo analysis if backend is unavailable
-      try {
-        const demoRes = await processDemoAnalyze(selectedFile, notes);
-        setResult(demoRes);
-        if (isHazard(demoRes.prediction)) {
-          triggerAlarm();
-        }
-      } catch (fallbackErr: any) {
-        setError('Image analysis failed. Please try another image.');
+      if (err.code === 'ECONNABORTED' || err.message?.includes('timeout')) {
+        setError('Connection timed out. The backend server on Render may be waking up from sleep. Please wait a few seconds and try again.');
+      } else if (!err.response) {
+        setError('Unable to reach backend API server. Please verify the backend service is running and accessible.');
+      } else {
+        const detail = err.response?.data?.detail || err.message || 'Image analysis failed.';
+        setError(`Analysis error: ${detail}`);
       }
     } finally {
       setLoading(false);
@@ -246,7 +246,7 @@ export const ImageDetectionPage: React.FC = () => {
         /* Results View (Side-by-Side Display) */
         <div className="space-y-6">
           {/* Prominent Prediction Banner */}
-          {isHazard(result.prediction) ? (
+          {result.prediction === 'hazard_detected' ? (
             <div className="bg-red-600 text-white p-6 rounded-2xl shadow-xl border-2 border-red-700 flex flex-col md:flex-row md:items-center justify-between gap-4 animate-pulse-danger">
               <div className="flex items-center space-x-4">
                 <div className="bg-white/20 p-3 rounded-2xl">
@@ -273,6 +273,33 @@ export const ImageDetectionPage: React.FC = () => {
                 </div>
               </div>
             </div>
+          ) : result.prediction === 'uncertain' ? (
+            <div className="bg-amber-600 text-white p-6 rounded-2xl shadow-xl border-2 border-amber-700 flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center space-x-4">
+                <div className="bg-white/20 p-3 rounded-2xl">
+                  <AlertTriangle className="w-8 h-8 text-white" />
+                </div>
+                <div>
+                  <div className="flex items-center space-x-2">
+                    <span className="bg-white text-amber-900 text-xs font-black px-2.5 py-0.5 rounded-full uppercase tracking-wider">
+                      INCONCLUSIVE / UNCERTAIN
+                    </span>
+                    <span className="text-xs text-amber-100 font-mono">Mode: {result.mode}</span>
+                  </div>
+                  <h2 className="text-2xl font-black mt-1 tracking-tight">UNCERTAIN — MANUAL INSPECTION REQUIRED</h2>
+                  <p className="text-xs text-amber-100 mt-0.5">
+                    Model Confidence: <strong>{(result.confidence * 100).toFixed(1)}%</strong> (Below 65% Decision Threshold) | No Confirmed Hazard
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-3">
+                <div className="bg-amber-800/80 px-4 py-2 rounded-xl border border-amber-400 text-center">
+                  <span className="text-xs font-bold text-amber-100 block">Alarm Silent</span>
+                  <span className="text-[10px] text-amber-200">Manual Check Needed</span>
+                </div>
+              </div>
+            </div>
           ) : (
             <div className="bg-emerald-600 text-white p-6 rounded-2xl shadow-xl border-2 border-emerald-700 flex items-center space-x-4">
               <div className="bg-white/20 p-3 rounded-2xl">
@@ -285,10 +312,34 @@ export const ImageDetectionPage: React.FC = () => {
                   </span>
                   <span className="text-xs text-emerald-100 font-mono">Mode: {result.mode}</span>
                 </div>
-                <h2 className="text-2xl font-black mt-1 tracking-tight">NO HAZARD INDICATORS DETECTED</h2>
+                <h2 className="text-2xl font-black mt-1 tracking-tight">NO VISIBLE FIRE / SMOKE DETECTED</h2>
                 <p className="text-xs text-emerald-100 mt-0.5">
                   Model Confidence: <strong>{(result.confidence * 100).toFixed(1)}%</strong> | Facility Nominally Secure
                 </p>
+              </div>
+            </div>
+          )}
+
+          {/* Model Probability Breakdown Card */}
+          {result.probabilities && (
+            <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm text-xs space-y-2">
+              <div className="flex items-center justify-between text-slate-700 font-semibold">
+                <span>Model Output Probabilities (Decision Threshold: 65%)</span>
+                <span className="font-mono text-slate-500">
+                  Hazard: {((result.probabilities.hazard_detected || 0) * 100).toFixed(1)}% | Normal: {((result.probabilities.normal || 0) * 100).toFixed(1)}%
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden flex">
+                <div
+                  className="bg-red-500 h-full"
+                  style={{ width: `${(result.probabilities.hazard_detected || 0) * 100}%` }}
+                  title={`Hazard: ${((result.probabilities.hazard_detected || 0) * 100).toFixed(1)}%`}
+                />
+                <div
+                  className="bg-emerald-500 h-full"
+                  style={{ width: `${(result.probabilities.normal || 0) * 100}%` }}
+                  title={`Normal: ${((result.probabilities.normal || 0) * 100).toFixed(1)}%`}
+                />
               </div>
             </div>
           )}
@@ -298,7 +349,7 @@ export const ImageDetectionPage: React.FC = () => {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-800 text-sm flex items-center space-x-2">
                 <Sliders className="w-4 h-4 text-blue-600" />
-                <span>Side-by-Side Visual Evaluation</span>
+                <span>Side-by-Side Visual Inspection & Illustrative Artifact</span>
               </h3>
               
               {result.visualization_image_path && (
@@ -306,13 +357,13 @@ export const ImageDetectionPage: React.FC = () => {
                   onClick={() => setShowOverlay(!showOverlay)}
                   className="bg-slate-100 hover:bg-slate-200 text-slate-800 font-bold text-xs px-3 py-1.5 rounded-lg border border-slate-300 transition"
                 >
-                  {showOverlay ? 'Hide Simulated Hazard Overlay' : 'Show Simulated Hazard Overlay'}
+                  {showOverlay ? 'Hide Visual Overlay' : 'Show Visual Overlay'}
                 </button>
               )}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Original Cabinet Image */}
+              {/* Original Image */}
               <div className="space-y-2">
                 <p className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center space-x-1">
                   <CheckCircle2 className="w-3.5 h-3.5 text-blue-600" />
@@ -327,16 +378,22 @@ export const ImageDetectionPage: React.FC = () => {
                 </div>
               </div>
 
-              {/* AI Visual Simulation Overlay */}
+              {/* Visual Artifact / Simulation Overlay */}
               <div className="space-y-2">
                 <p className="text-xs font-bold text-slate-600 uppercase tracking-wide flex items-center space-x-1">
                   <Sparkles className="w-3.5 h-3.5 text-amber-500" />
-                  <span>AI Explainability Heatmap & Simulated Plume</span>
+                  <span>
+                    {result.prediction === 'hazard_detected'
+                      ? 'Illustrative Simulation Overlay (Not a gas measurement)'
+                      : result.prediction === 'uncertain'
+                      ? 'Inspection Status Overlay (Inconclusive - No plume simulated)'
+                      : 'Inspection Status Overlay (Nominal Safe Status)'}
+                  </span>
                 </p>
                 <div className="bg-slate-900 rounded-xl overflow-hidden border border-slate-800 shadow-inner flex items-center justify-center min-h-[300px]">
                   <img
                     src={resolveImageUrl(showOverlay && result.visualization_image_path ? result.visualization_image_path : result.original_image_path)}
-                    alt="Simulated Visualization"
+                    alt="Inspection Artifact"
                     className="max-h-96 w-full object-contain"
                   />
                 </div>
@@ -347,7 +404,7 @@ export const ImageDetectionPage: React.FC = () => {
             <div className="bg-slate-50 border border-slate-200 p-3 rounded-xl text-xs text-slate-600 flex items-start space-x-2">
               <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
               <div>
-                <strong className="text-slate-800">Explainability Notice:</strong> The visualization renders attention maps and simulated risk plumes based on model features. Standard optical RGB cameras detect visible flames and smoke plumes; they do not directly measure chemical gas concentrations.
+                <strong className="text-slate-800">Scientific Limitation Notice:</strong> Standard optical RGB cameras detect visible flames and smoke plumes; they do not directly measure chemical gas concentrations, detect colorless or invisible chemical vapors, or replace physical gas detection hardware.
               </div>
             </div>
           </div>

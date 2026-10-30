@@ -11,22 +11,25 @@ export interface DetectionRecord {
   user_id: number;
   original_image_path: string;
   visualization_image_path?: string;
-  prediction: 'hazard_detected' | 'normal' | 'leakage' | 'no_leakage';
+  prediction: 'hazard_detected' | 'normal' | 'uncertain' | 'leakage' | 'no_leakage';
   confidence: number;
   mode: 'trained_model' | 'demo_mode';
   visualization_type: string;
-  severity?: 'High' | 'Medium' | 'Low' | 'None';
+  severity?: 'High' | 'Medium' | 'Low' | 'Inconclusive' | 'None';
   alarm_recommended: boolean;
   alarm_activated: boolean;
   model_version: string;
   notes?: string;
   timestamp: string;
+  probabilities?: Record<string, number>;
+  limitations_notice?: string;
 }
 
 export interface DashboardStats {
   total_images: number;
   leakage_predictions: number;
   safe_predictions: number;
+  uncertain_predictions?: number;
   latest_detection: DetectionRecord | null;
   alarm_status: 'active' | 'silent' | 'standby';
   model_status: string;
@@ -35,6 +38,7 @@ export interface DashboardStats {
     total: number;
     leakage: number;
     safe: number;
+    uncertain?: number;
   }>;
   prediction_breakdown: Array<{
     name: string;

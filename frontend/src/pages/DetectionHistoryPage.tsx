@@ -10,7 +10,8 @@ import {
   RefreshCw,
   Calendar,
   Layers,
-  Flame
+  Flame,
+  AlertTriangle
 } from 'lucide-react';
 
 import api, { resolveImageUrl } from '../services/api';
@@ -136,6 +137,7 @@ export const DetectionHistoryPage: React.FC = () => {
               <option value="all">All Predictions</option>
               <option value="hazard_detected">Hazard Alerts Only</option>
               <option value="normal">Safe Scans Only</option>
+              <option value="uncertain">Inconclusive / Uncertain Only</option>
             </select>
           </div>
 
@@ -201,10 +203,15 @@ export const DetectionHistoryPage: React.FC = () => {
 
                 {/* Status Badge */}
                 <div className="flex items-center justify-between pt-1">
-                  {isHazard(record.prediction) ? (
+                  {record.prediction === 'hazard_detected' || record.prediction === 'leakage' ? (
                     <span className="inline-flex items-center space-x-1 bg-red-100 text-red-700 font-bold text-xs px-2.5 py-1 rounded-full border border-red-300">
                       <Flame className="w-3.5 h-3.5 text-red-600" />
                       <span>Hazard Alert</span>
+                    </span>
+                  ) : record.prediction === 'uncertain' ? (
+                    <span className="inline-flex items-center space-x-1 bg-amber-100 text-amber-800 font-bold text-xs px-2.5 py-1 rounded-full border border-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 text-amber-600" />
+                      <span>Inconclusive</span>
                     </span>
                   ) : (
                     <span className="inline-flex items-center space-x-1 bg-emerald-100 text-emerald-700 font-bold text-xs px-2.5 py-1 rounded-full border border-emerald-300">

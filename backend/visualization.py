@@ -7,33 +7,80 @@ def generate_hazard_visualization(
     image_path: str,
     output_path: str,
     is_hazard: bool = True,
-    confidence: float = 0.85
+    confidence: float = 0.85,
+    status: str = None
 ) -> str:
     """
-    Generates an explainable AI Grad-CAM / simulated hazard plume visualization overlay.
-    Preserves original image, adds semi-transparent multi-colored thermal plume (blue->cyan->yellow->orange->red),
-    draws an intensity legend, and burns in an explicit scientific disclaimer banner.
+    Generates an illustrative visual inspection artifact.
+    NOTE: This is an illustrative simulation overlay, NOT a genuine Grad-CAM activation map 
+    and NOT a physical chemical gas measurement. Ordinary RGB cameras cannot detect colorless 
+    or invisible chemical vapors.
     """
     img_bgr = cv2.imread(image_path)
     if img_bgr is None:
         raise ValueError(f"Could not read image from {image_path}")
 
     height, width = img_bgr.shape[:2]
+    
+    # Determine resolved status
+    current_status = status or ("hazard_detected" if is_hazard else "normal")
 
-    if not is_hazard:
-        # For safe / normal conditions, add green status banner
+    if current_status == "uncertain":
+        # Amber banner for inconclusive / uncertain predictions (no fake plume!)
         overlay = img_bgr.copy()
-        banner_h = max(35, int(height * 0.07))
-        cv2.rectangle(overlay, (0, height - banner_h), (width, height), (34, 197, 94), -1)
-        combined = cv2.addWeighted(overlay, 0.85, img_bgr, 0.15, 0)
+        banner_h = max(42, int(height * 0.08))
+        # Amber / Dark Orange in BGR: (0, 140, 255)
+        cv2.rectangle(overlay, (0, height - banner_h), (width, height), (0, 140, 255), -1)
+        combined = cv2.addWeighted(overlay, 0.90, img_bgr, 0.10, 0)
         cv2.putText(
             combined,
-            "SAFE STATUS - NO COMBUSTION HAZARDS DETECTED",
-            (15, height - int(banner_h * 0.3)),
+            "INCONCLUSIVE / UNCERTAIN - MANUAL INSPECTION REQUIRED",
+            (15, height - int(banner_h * 0.45)),
             cv2.FONT_HERSHEY_SIMPLEX,
-            max(0.45, width / 1200.0),
+            max(0.42, width / 1250.0),
             (255, 255, 255),
             2,
+            cv2.LINE_AA
+        )
+        cv2.putText(
+            combined,
+            "Confidence below 65% threshold. RGB camera cannot detect invisible vapors.",
+            (15, height - int(banner_h * 0.15)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.34, width / 1500.0),
+            (240, 240, 240),
+            1,
+            cv2.LINE_AA
+        )
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        cv2.imwrite(output_path, combined)
+        return output_path
+
+    if current_status == "normal" or not is_hazard:
+        # Green status banner for verified nominal conditions (no fake plume!)
+        overlay = img_bgr.copy()
+        banner_h = max(42, int(height * 0.08))
+        # Emerald Green in BGR: (34, 197, 94)
+        cv2.rectangle(overlay, (0, height - banner_h), (width, height), (34, 197, 94), -1)
+        combined = cv2.addWeighted(overlay, 0.90, img_bgr, 0.10, 0)
+        cv2.putText(
+            combined,
+            "SAFE STATUS - NO VISIBLE FIRE OR SMOKE DETECTED",
+            (15, height - int(banner_h * 0.45)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.42, width / 1250.0),
+            (255, 255, 255),
+            2,
+            cv2.LINE_AA
+        )
+        cv2.putText(
+            combined,
+            "Optical RGB evaluation nominal. Does not measure chemical gas concentration.",
+            (15, height - int(banner_h * 0.15)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            max(0.34, width / 1500.0),
+            (240, 240, 240),
+            1,
             cv2.LINE_AA
         )
         os.makedirs(os.path.dirname(output_path), exist_ok=True)
@@ -74,7 +121,7 @@ def generate_hazard_visualization(
 
     if legend_y > 40 and legend_x > 20:
         cv2.rectangle(blended, (legend_x - 10, legend_y - 22), (legend_x + legend_w + 10, legend_y + legend_h + 18), (15, 23, 42), -1)
-        cv2.putText(blended, "Simulated Risk Density", (legend_x, legend_y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.38, (226, 232, 240), 1, cv2.LINE_AA)
+        cv2.putText(blended, "Illustrative Simulation Density", (legend_x, legend_y - 6), cv2.FONT_HERSHEY_SIMPLEX, 0.35, (226, 232, 240), 1, cv2.LINE_AA)
 
         for i in range(legend_w):
             val = int(255 * (i / legend_w))
@@ -85,16 +132,16 @@ def generate_hazard_visualization(
         cv2.putText(blended, "High", (legend_x + legend_w - 25, legend_y + legend_h + 14), cv2.FONT_HERSHEY_SIMPLEX, 0.32, (148, 163, 184), 1, cv2.LINE_AA)
 
     # Red warning disclaimer banner burned into artifact
-    banner_height = 40
+    banner_height = 42
     banner = np.zeros((banner_height, width, 3), dtype=np.uint8)
     banner[:] = (229, 57, 53) # Danger Red (BGR)
 
     cv2.putText(
         banner,
-        "AI-SIMULATED HAZARD VISUALIZATION -- NOT A REAL GAS MEASUREMENT",
+        "ILLUSTRATIVE SIMULATION -- NOT A MEASUREMENT (Optical RGB Only, No Gas Detection)",
         (12, 26),
         cv2.FONT_HERSHEY_SIMPLEX,
-        max(0.42, width / 1300.0),
+        max(0.38, width / 1400.0),
         (255, 255, 255),
         2,
         cv2.LINE_AA
